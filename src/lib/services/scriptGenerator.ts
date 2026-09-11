@@ -20,6 +20,8 @@ import type { ScriptRow, VideoRow } from "@/lib/types";
 export interface GenerateOptions {
   /** gera a partir de uma seleção aleatória do conteúdo do Augusto */
   random?: boolean;
+  /** vídeos escolhidos um a um na tela "Criar roteiro" (têm prioridade) */
+  videoIds?: string[];
   best?: { period: PeriodId; metric: RankMetric; top: number } | null;
   /** categorias do Augusto e de concorrentes ("@usuario+Categoria"), pelo nome */
   categories?: string[];
@@ -74,6 +76,19 @@ async function collectReferences(opts: GenerateOptions) {
   const refs = new Map<string, Reference & { reason: string }>();
   const labels: string[] = [];
 
+  // vídeos escolhidos a dedo no painel
+  if (opts.videoIds?.length) {
+    const all = await listVideos({ scope: "all" });
+    const chosen = all.filter((v) => opts.videoIds!.includes(v.id));
+    const analyses = await latestDoneAnalyses(chosen.map((v) => v.id));
+    const comAnalise = chosen.filter((v) => analyses.has(v.id));
+    if (!comAnalise.length) {
+      throw new GeneratorInputError("Os vídeos escolhidos ainda não têm análise do Gemini. Analise-os primeiro (em Posts ou na página do concorrente).");
+    }
+    for (const v of comAnalise) refs.set(v.id, { video: v, analysis: analyses.get(v.id)!, reason: "escolhidos" });
+    labels.push(`${comAnalise.length} vídeos escolhidos`);
+  }
+
   // melhores posts do Augusto no período
   if (opts.best) {
     const own = await listVideos({ scope: "own" });
@@ -117,8 +132,8 @@ async function collectReferences(opts: GenerateOptions) {
     labels.push(`@${top[0].competitor_username}`);
   }
 
-  // limita o tamanho do pedido: fica com os de mais views
-  const max = opts.maxReferences ?? 10;
+  // limita o tamanho do pedido: fica com os de mais views (os escolhidos a dedo cabem todos)
+  const max = opts.maxReferences ?? Math.max(10, opts.videoIds?.length ?? 0);
   const list = Array.from(refs.values()).sort((a, b) => (b.video.views ?? 0) - (a.video.views ?? 0)).slice(0, max);
   return { list, labels };
 }
@@ -169,7 +184,7 @@ export async function buildGenerationPrompt(input: GenerateOptions) {
   const opts = input.random ? await randomOptions(input) : input;
   const { list, labels } = await collectReferences(opts);
   const passages = opts.librarySearch?.trim() ? await libraryPassages(opts.librarySearch.trim()) : "";
-  if (!list.length && !passages && !opts.subject?.trim() && !opts.videoSearch?.term?.trim() && !opts.instructions?.trim() && !opts.instructionsOverride?.trim()) {
+  if (!list.length && !passages && !opts.subject?.trim() && !opts.videoIds?.length && !opts.videoSearch?.term?.trim() && !opts.instructions?.trim() && !opts.instructionsOverride?.trim()) {
     throw new GeneratorInputError("Escolha ao menos uma fonte: melhores vídeos, categorias, concorrentes, um assunto ou trechos das aulas.");
   }
 

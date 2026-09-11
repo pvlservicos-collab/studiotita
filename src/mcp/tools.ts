@@ -340,6 +340,7 @@ export function registerTools(server: McpServer) {
 
   tool<{
     random?: boolean;
+    video_ids?: string[];
     best_period?: "30d" | "last_month" | "quarter" | "semester";
     best_metric?: "views" | "saves" | "shares" | "comments" | "likes" | "engagement";
     best_top?: number;
@@ -355,11 +356,12 @@ export function registerTools(server: McpServer) {
     title: "Criar roteiro (gerador)",
     description:
       "O mesmo da tela 'Criar roteiro': pede ao Gemini um roteiro novo no método e na estrutura do Augusto, combinando as fontes que você escolher: " +
-      "random=true (seleção aleatória do conteúdo dele), melhores vídeos (best_period + best_metric + best_top), categorias (do Augusto ou '@concorrente+Categoria'), " +
+      "video_ids (vídeos escolhidos a dedo, o jeito mais direto), random=true (seleção aleatória do conteúdo dele), melhores vídeos (best_period + best_metric + best_top), categorias (do Augusto ou '@concorrente+Categoria'), " +
       "competitor_ids (os vídeos mais vistos e já analisados de cada concorrente), subject (assunto específico), library_search (trechos das aulas da Biblioteca), " +
       "instructions (extras) e scenes=true (ideias de cena do Estúdio Reels). Salva em Roteiros gerados, com pontuação pelas referências. Consome a API do Gemini.",
     inputSchema: {
       random: z.boolean().optional(),
+      video_ids: z.array(z.string()).optional().describe("Vídeos de referência escolhidos a dedo (UUIDs de list_videos)"),
       best_period: z.enum(["30d", "last_month", "quarter", "semester"]).optional(),
       best_metric: z.enum(["views", "saves", "shares", "comments", "likes", "engagement"]).optional(),
       best_top: z.number().int().min(1).max(20).optional(),
@@ -376,6 +378,7 @@ export function registerTools(server: McpServer) {
     script: await generateScript(
       {
         random: o.random,
+        videoIds: o.video_ids,
         best: o.best_period ? { period: o.best_period, metric: o.best_metric ?? "views", top: o.best_top ?? 5 } : null,
         categories: o.categories,
         competitorIds: o.competitor_ids,
