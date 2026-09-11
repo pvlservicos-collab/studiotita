@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(212, 169, 79, 0.12), transparent 60%),
+    radial-gradient(1000px 500px at 110% 10%, rgba(212, 169, 79, 0.08), transparent 55%),
+    linear-gradient(180deg, #fbfaf7 0%, #f4f1ea 100%);
+  color: #21252b;
+  min-height: 100vh;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(212, 169, 79, 0.25);
+}
+
+.gold-gradient-text {
+  background: linear-gradient(90deg, #a87c2c, #e0c078 45%, #a87c2c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.btn-gold {
+  background: linear-gradient(135deg, #e0c078, #c79a3c);
+  color: #2b2306;
+  box-shadow: 0 6px 18px -4px rgba(199, 154, 60, 0.55);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.btn-gold:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px -4px rgba(199, 154, 60, 0.65);
+}
+
+.btn-gold:active {
+  transform: translateY(0);
+}
+
+.btn-gold:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(199, 154, 60, 0.35);
+  border-radius: 999px;
+}
+
+.shimmer-bar {
+  background: linear-gradient(
+    90deg,
+    rgba(212, 169, 79, 0.15) 0%,
+    rgba(212, 169, 79, 0.55) 50%,
+    rgba(212, 169, 79, 0.15) 100%
+  );
+  background-size: 800px 100%;
+}
