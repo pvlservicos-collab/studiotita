@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
       metric: (sp.get("metric") as RankMetric) || undefined,
       top: sp.get("top") ? Number(sp.get("top")) : undefined,
       includeTranscripts: sp.get("transcripts") === "1",
+      includeFrames: sp.get("frames") === "1",
     });
     return NextResponse.json(report);
   } catch (err) {

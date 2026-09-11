@@ -26,6 +26,7 @@ export interface VideoScriptRow {
   transcript: string | null;
   structure: string | null;
   hook: string | null;
+  frames: string | null;
   categories: string[] | null;
   rules_fit: string | null;
   model: string | null;
@@ -50,7 +51,7 @@ export async function listVideoScripts(opts: { scope?: "own" | "competitor" | "a
   return query<VideoScriptRow>(
     `select v.id as video_id, v.caption, v.thumbnail_url, v.permalink, v.posted_at, v.source, v.competitor_id,
             c.username as competitor_username, v.hashtag, v.views, v.likes, v.comments, v.saves, v.shares, v.metrics,
-            la.id as analysis_id, la.summary, la.transcript, la.structure, la.hook, la.categories, la.rules_fit, la.model, la.completed_at
+            la.id as analysis_id, la.summary, la.transcript, la.structure, la.hook, la.frames, la.categories, la.rules_fit, la.model, la.completed_at
      from videos v
      left join competitors c on c.id = v.competitor_id
      join lateral (

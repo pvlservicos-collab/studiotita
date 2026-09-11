@@ -14,14 +14,15 @@ export interface ReportOptions extends VideoFilter {
   metric?: RankMetric;
   top?: number;
   includeTranscripts?: boolean;
+  includeFrames?: boolean;
 }
 
-type DoneAnalysis = Pick<AnalysisRow, "video_id" | "summary" | "transcript" | "structure" | "hook" | "categories" | "rules_fit" | "model">;
+type DoneAnalysis = Pick<AnalysisRow, "video_id" | "summary" | "transcript" | "structure" | "hook" | "frames" | "categories" | "rules_fit" | "model">;
 
 export async function latestDoneAnalyses(videoIds: string[]) {
   if (!videoIds.length) return new Map<string, DoneAnalysis>();
   const rows = await query<DoneAnalysis>(
-    `select distinct on (video_id) video_id, summary, transcript, structure, hook, categories, rules_fit, model
+    `select distinct on (video_id) video_id, summary, transcript, structure, hook, frames, categories, rules_fit, model
      from analyses where status = 'done' and video_id = any($1::uuid[])
      order by video_id, requested_at desc`,
     [videoIds]
@@ -99,6 +100,7 @@ export async function buildReport(opts: ReportOptions) {
     if (a.structure) lines.push(`**Estrutura gerada pelo Gemini:**`, a.structure, "");
     if (a.rules_fit) lines.push(`**Adequação às regras do Augusto:**`, a.rules_fit, "");
     if (opts.includeTranscripts && a.transcript) lines.push(`**Transcrição (Gemini):**`, a.transcript, "");
+    if (opts.includeFrames && a.frames) lines.push(`**Frame a frame (Gemini):**`, a.frames, "");
   });
 
   return { markdown: lines.filter((l, i, arr) => !(l === "" && arr[i - 1] === "")).join("\n"), count: videos.length, analyzed, label };

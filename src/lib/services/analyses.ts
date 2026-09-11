@@ -35,6 +35,7 @@ export interface UpdateAnalysisInput {
   transcript?: string | null;
   structure?: string | null;
   hook?: string | null;
+  frames?: string | null;
   categories?: string[] | null;
   rules_fit?: string | null;
 }
@@ -46,6 +47,7 @@ export async function updateAnalysis(id: string, input: UpdateAnalysisInput): Pr
     ["transcript", input.transcript],
     ["structure", input.structure],
     ["hook", input.hook],
+    ["frames", input.frames],
     ["categories", input.categories === undefined ? undefined : normalizeCategories(input.categories)],
     ["rules_fit", input.rules_fit],
   ];
@@ -155,7 +157,7 @@ async function processAnalysis(analysisId: string, video: VideoRow, prompt: stri
     const result = await analyzeVideoWithGemini(videoUrl, prompt);
     await query(
       `update analyses set status = 'done', summary = $2, transcript = $3, structure = $4, hook = $5,
-              categories = $6, model = $7, raw_response = $8, completed_at = now()
+              frames = $6, categories = $7, model = $8, raw_response = $9, completed_at = now()
        where id = $1`,
       [
         analysisId,
@@ -163,6 +165,7 @@ async function processAnalysis(analysisId: string, video: VideoRow, prompt: stri
         result.transcript,
         result.structure,
         result.hook,
+        result.frames,
         normalizeCategories(result.categories),
         result.model,
         JSON.stringify(result.raw),

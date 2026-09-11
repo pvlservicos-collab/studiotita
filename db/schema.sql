@@ -155,6 +155,8 @@ create index if not exists idx_integration_logs_created_at on integration_logs (
 alter table analyses add column if not exists structure  text;    -- estrutura narrativa por parte/segundo
 alter table analyses add column if not exists hook       text;    -- gancho: os primeiros segundos
 alter table analyses add column if not exists categories text[];  -- temas do vídeo
+-- leitura visual segundo a segundo (o que aparece na tela e como está a voz)
+alter table analyses add column if not exists frames     text;
 create index if not exists idx_analyses_categories on analyses using gin (categories);
 
 -- Contas concorrentes (só contas profissionais: a Meta não expõe contas pessoais).

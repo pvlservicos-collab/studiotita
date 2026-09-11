@@ -122,6 +122,7 @@ export interface GeminiAnalysisResult {
   transcript: string;
   structure: string;
   hook: string;
+  frames: string;
   categories: string[];
   prompt: string;
   model: string;
@@ -133,7 +134,11 @@ export interface GeminiAnalysisResult {
  * mandar outro; o usado fica gravado em analyses.prompt.
  */
 export const DEFAULT_ANALYSIS_PROMPT = `Você é um analista de conteúdo especializado em vídeos curtos do Instagram (Reels).
-Assista ao vídeo inteiro e responda em português do Brasil, preenchendo cinco campos:
+Assista ao vídeo inteiro, olhando os quadros (frames) e ouvindo o áudio, e responda em português do Brasil.
+Responda de forma COMPLETA em todos os campos, do primeiro ao último segundo. Não resuma, não corte, não pule
+trechos e não economize espaço: esta análise é usada para reconstruir o vídeo e escrever roteiros novos.
+
+Preencha seis campos:
 
 1. "resumo": um resumo objetivo do vídeo — do que ele trata, a mensagem principal, o tom, o ritmo, a edição e o CTA usado.
 
@@ -160,7 +165,23 @@ Assista ao vídeo inteiro e responda em português do Brasil, preenchendo cinco 
    (verbal), o texto na tela (textual), o que aparece na imagem (visual), quantos segundos dura e qual
    técnica ele usa (acusar um erro, negar uma crença, abrir uma lacuna de curiosidade, promessa, etc.).
 
-5. "categorias": de 1 a 3 categorias (temas) abordadas no vídeo, com nomes curtos em português
+5. "frames": a leitura VISUAL do vídeo, frame a frame, do início ao fim, no formato "[00:03] ...".
+   Régua obrigatória: uma linha a cada 1 ou 2 segundos, NUNCA pulando mais de 2 segundos entre uma linha e a
+   seguinte, começando em [00:00] e indo até o último segundo do vídeo. Um vídeo de 60 segundos tem pelo menos
+   30 linhas; um de 3 minutos, pelo menos 90. Quando a imagem não mudar, escreva a linha mesmo assim, dizendo o
+   que a pessoa está fazendo naquele instante (gesto, expressão, palavra enfatizada).
+   Em cada linha descreva o que está na tela naquele momento:
+   - enquadramento e câmera (close, meio corpo, selfie na mão, tripé, zoom, movimento, corte seco);
+   - o que a pessoa faz: gesto, postura, expressão facial, para onde olha;
+   - cenário, roupa, objetos e o que aparece ao fundo;
+   - TODO texto que aparece na tela, copiado palavra por palavra (headline, legenda queimada, emoji, sticker, seta,
+     destaque, marca d'água), com a posição aproximada (topo, centro, rodapé);
+   - inserções: b-roll, print, gráfico, imagem, meme, mudança de cena;
+   - como está a voz nesse trecho: tom (calmo, indignado, provocativo, animado), ritmo, volume, ênfase e pausas.
+   Percorra o vídeo inteiro, mesmo que seja longo. Esta parte precisa ser detalhada o suficiente para alguém
+   remontar a cena sem assistir ao vídeo.
+
+6. "categorias": de 1 a 3 categorias (temas) abordadas no vídeo, com nomes curtos em português
    (ex.: "Gestão de tempo", "Política", "Organização", "Alta performance", "Filosofia").`;
 
 // A resposta sempre volta nesses campos, mesmo com prompt personalizado.
@@ -171,9 +192,10 @@ const RESPONSE_SCHEMA = {
     transcricao: { type: "STRING" },
     estrutura: { type: "STRING" },
     gancho: { type: "STRING" },
+    frames: { type: "STRING" },
     categorias: { type: "ARRAY", items: { type: "STRING" } },
   },
-  required: ["resumo", "transcricao", "estrutura", "gancho", "categorias"],
+  required: ["resumo", "transcricao", "estrutura", "gancho", "frames", "categorias"],
 };
 
 /**
@@ -190,28 +212,46 @@ export async function analyzeVideoWithGemini(
   const uploaded = await uploadVideoToGemini(videoUrl);
   await waitUntilActive(uploaded.name, apiKey);
 
-  const res = await fetch(
-    `${GEMINI_API_BASE}/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
+  // fps mais alto = mais quadros analisados (a leitura frame a frame fica melhor);
+  // maxOutputTokens alto porque a resposta completa é longa.
+  const pedido = (comVideoMetadata: boolean) => ({
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            file_data: { file_uri: uploaded.uri, mime_type: uploaded.mimeType },
+            ...(comVideoMetadata ? { video_metadata: { fps: 2 } } : {}),
+          },
+          { text: prompt },
+        ],
+      },
+    ],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: RESPONSE_SCHEMA,
+      maxOutputTokens: 32768,
+      temperature: 0.6,
+    },
+  });
+
+  const chamar = (comVideoMetadata: boolean) =>
+    fetch(`${GEMINI_API_BASE}/v1beta/models/${model}:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { file_data: { file_uri: uploaded.uri, mime_type: uploaded.mimeType } },
-              { text: prompt },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
-        },
-      }),
-    }
-  );
+      body: JSON.stringify(pedido(comVideoMetadata)),
+    });
+
+  let res = await chamar(true);
+  if (!res.ok) {
+    // modelos que não aceitam video_metadata: refaz sem esse pedaço
+    const body = await res.text();
+    if (/video_metadata|videoMetadata|Unknown name/i.test(body)) res = await chamar(false);
+    else
+      throw new GeminiRequestError(
+        `Gemini retornou erro (${res.status}) ao gerar a análise: ${body}. Verifique GEMINI_MODEL e GEMINI_API_KEY.`
+      );
+  }
 
   if (!res.ok) {
     const body = await res.text();
@@ -224,7 +264,7 @@ export async function analyzeVideoWithGemini(
   const text: string =
     data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
 
-  let parsed: { resumo?: string; transcricao?: string; estrutura?: string; gancho?: string; categorias?: string[] } = {};
+  let parsed: { resumo?: string; transcricao?: string; estrutura?: string; gancho?: string; frames?: string; categorias?: string[] } = {};
   try {
     parsed = JSON.parse(text);
   } catch {
@@ -237,6 +277,7 @@ export async function analyzeVideoWithGemini(
     transcript: (parsed.transcricao ?? "").trim(),
     structure: (parsed.estrutura ?? "").trim(),
     hook: (parsed.gancho ?? "").trim(),
+    frames: (parsed.frames ?? "").trim(),
     categories: Array.isArray(parsed.categorias) ? parsed.categorias.map((c) => String(c)) : [],
     prompt,
     model,

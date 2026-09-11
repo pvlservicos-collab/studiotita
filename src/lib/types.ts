@@ -61,6 +61,8 @@ export interface AnalysisRow {
   structure: string | null;
   /** Gancho (primeiros segundos) — identificado pelo Gemini. */
   hook: string | null;
+  /** Leitura visual segundo a segundo: o que aparece na tela e como está a voz. */
+  frames: string | null;
   /** Categorias/temas do vídeo — geradas pelo Gemini. */
   categories: string[] | null;
   /** Adequação às regras do Augusto — preenchida depois, à mão ou pelo Claude. */

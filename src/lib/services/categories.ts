@@ -16,7 +16,7 @@ export class CategoryInputError extends Error {}
 export interface CategoryVideo {
   video: VideoRow;
   enabled: boolean;
-  analysis: Pick<AnalysisRow, "id" | "summary" | "transcript" | "structure" | "hook" | "categories" | "model">;
+  analysis: Pick<AnalysisRow, "id" | "summary" | "transcript" | "structure" | "hook" | "frames" | "categories" | "model">;
 }
 
 export interface CategoryGroup {
@@ -36,10 +36,10 @@ export function originPrefix(v: Pick<VideoRow, "source" | "competitor_username" 
 }
 
 export async function listCategories(): Promise<CategoryGroup[]> {
-  const rows = await query<VideoRow & { a_id: string; a_summary: string; a_transcript: string; a_structure: string; a_hook: string; a_categories: string[]; a_model: string }>(
+  const rows = await query<VideoRow & { a_id: string; a_summary: string; a_transcript: string; a_structure: string; a_hook: string; a_frames: string; a_categories: string[]; a_model: string }>(
     `select v.*, c.username as competitor_username,
             la.id as a_id, la.summary as a_summary, la.transcript as a_transcript, la.structure as a_structure,
-            la.hook as a_hook, la.categories as a_categories, la.model as a_model
+            la.hook as a_hook, la.frames as a_frames, la.categories as a_categories, la.model as a_model
      from videos v
      left join competitors c on c.id = v.competitor_id
      join lateral (
@@ -53,7 +53,7 @@ export async function listCategories(): Promise<CategoryGroup[]> {
 
   const groups = new Map<string, { names: Map<string, number>; videos: CategoryVideo[]; origin: CategoryGroup["origin"]; owner: string | null }>();
   for (const r of rows) {
-    const { a_id, a_summary, a_transcript, a_structure, a_hook, a_categories, a_model, ...video } = r;
+    const { a_id, a_summary, a_transcript, a_structure, a_hook, a_frames, a_categories, a_model, ...video } = r;
     const prefix = originPrefix(video);
     const origin: CategoryGroup["origin"] = video.source === "competitor" ? "competitor" : video.source === "hashtag" ? "hashtag" : "own";
     for (const raw of a_categories) {
@@ -66,7 +66,7 @@ export async function listCategories(): Promise<CategoryGroup[]> {
         // vem de uma análise concluída: o card mostra "Ver análise" e as categorias
         video: { ...video, raw_meta: undefined, latest_analysis_id: a_id, latest_analysis_status: "done", latest_analysis_categories: a_categories } as VideoRow,
         enabled: !disabled.has(`${key}|${video.id}`),
-        analysis: { id: a_id, summary: a_summary, transcript: a_transcript, structure: a_structure, hook: a_hook, categories: a_categories, model: a_model },
+        analysis: { id: a_id, summary: a_summary, transcript: a_transcript, structure: a_structure, hook: a_hook, frames: a_frames, categories: a_categories, model: a_model },
       });
       groups.set(key, g);
     }
@@ -104,15 +104,23 @@ export function originLabel(v: VideoRow) {
 }
 
 /** Um vídeo de referência em Markdown: métricas + o que o Gemini extraiu. */
-export function referenceMarkdown(v: VideoRow, a: Pick<AnalysisRow, "hook" | "structure" | "transcript">, index: number, maxTranscript = 4000) {
-  const transcript = a.transcript && a.transcript.length > maxTranscript ? `${a.transcript.slice(0, maxTranscript)}…` : a.transcript;
+export function referenceMarkdown(
+  v: VideoRow,
+  a: Pick<AnalysisRow, "hook" | "structure" | "transcript" | "frames">,
+  index: number,
+  maxTranscript = 4000,
+  /** inclui a leitura frame a frame (usado quando o pedido é de cenas) */
+  includeFrames = false
+) {
+  const corta = (t: string | null, max: number) => (t && t.length > max ? `${t.slice(0, max)}…` : t);
   return [
     `## ${index}. ${(v.caption ?? "Sem legenda").split("\n")[0].slice(0, 90)}`,
     `${originLabel(v)}${v.posted_at ? ` · ${new Date(v.posted_at).toLocaleDateString("pt-BR")}` : ""}${v.permalink ? ` · ${v.permalink}` : ""}`,
     `**Métricas:** ${metricsLine(v) || "sem métricas"}`,
     a.hook ? `**Gancho identificado pelo Gemini:**\n${a.hook}` : "",
     a.structure ? `**Estrutura gerada pelo Gemini:**\n${a.structure}` : "",
-    transcript ? `**Roteiro (transcrição do Gemini):**\n${transcript}` : "",
+    corta(a.transcript, maxTranscript) ? `**Roteiro (transcrição do Gemini):**\n${corta(a.transcript, maxTranscript)}` : "",
+    includeFrames && corta(a.frames, 5000) ? `**Frame a frame (o que aparecia na tela):**\n${corta(a.frames, 5000)}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");

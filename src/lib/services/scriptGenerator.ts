@@ -70,7 +70,7 @@ export async function defaultGenerationInstructions(category: string) {
   return defaultInstructions(`a categoria "${category}"`);
 }
 
-type Reference = { video: VideoRow; analysis: { hook: string | null; structure: string | null; transcript: string | null } };
+type Reference = { video: VideoRow; analysis: { hook: string | null; structure: string | null; transcript: string | null; frames: string | null } };
 
 async function collectReferences(opts: GenerateOptions) {
   const refs = new Map<string, Reference & { reason: string }>();
@@ -202,7 +202,12 @@ export async function buildGenerationPrompt(input: GenerateOptions) {
     parts.push(`\n=== TRECHOS DAS AULAS DO AUGUSTO (use as ideias com fidelidade; nunca invente falas nem cite o que não está aqui) ===\n${passages}`);
   }
   if (list.length) {
-    parts.push(`\n=== VÍDEOS DE REFERÊNCIA (${labels.join(" · ")}) ===\n\n${list.map((r, i) => referenceMarkdown(r.video, r.analysis, i + 1)).join("\n\n---\n\n")}`);
+    // com cenas ligadas, manda também o frame a frame: é o que mostra como as telas apareciam
+    parts.push(
+      `\n=== VÍDEOS DE REFERÊNCIA (${labels.join(" · ")}) ===\n\n${list
+        .map((r, i) => referenceMarkdown(r.video, r.analysis, i + 1, 4000, Boolean(opts.scenes)))
+        .join("\n\n---\n\n")}`
+    );
   }
 
   const label = opts.random ? `Aleatório · ${labels.join(", ") || "aulas"}` : labels.join(", ") || (opts.subject?.trim() ?? "Assunto livre");

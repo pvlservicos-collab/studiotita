@@ -157,7 +157,7 @@ export function registerTools(server: McpServer) {
     return { label: r.label, incomplete: r.incomplete, total: r.videos.length, videos: r.videos.map(slimVideo) };
   });
 
-  tool<{ scope?: "own" | "competitor" | "hashtag"; competitor_id?: string; hashtag?: string; mode?: "all" | "best"; period?: "30d" | "last_month" | "quarter" | "semester"; metric?: "views" | "saves" | "shares" | "comments" | "likes" | "engagement"; top?: number; include_transcripts?: boolean }>("get_posts_report", {
+  tool<{ scope?: "own" | "competitor" | "hashtag"; competitor_id?: string; hashtag?: string; mode?: "all" | "best"; period?: "30d" | "last_month" | "quarter" | "semester"; metric?: "views" | "saves" | "shares" | "comments" | "likes" | "engagement"; top?: number; include_transcripts?: boolean; include_frames?: boolean }>("get_posts_report", {
     title: "Relatório de posts",
     description: "Relatório em Markdown (o mesmo do botão 'Gerar relatório de todos'): tabela de métricas + resumo, gancho, estrutura, categorias e adequação de cada post. mode=all (todos) ou best (melhores do período).",
     inputSchema: {
@@ -165,11 +165,13 @@ export function registerTools(server: McpServer) {
       mode: z.enum(["all", "best"]).optional(),
       ...bestSchema,
       include_transcripts: z.boolean().optional().describe("Incluir as transcrições completas (fica bem maior)"),
+      include_frames: z.boolean().optional().describe("Incluir a leitura frame a frame de cada vídeo (fica bem maior)"),
     },
   }, async (o) => {
     const r = await buildReport({
       scope: o.scope, competitorId: o.competitor_id, hashtag: o.hashtag, mode: o.mode, period: o.period, metric: o.metric, top: o.top,
       includeTranscripts: o.include_transcripts,
+      includeFrames: o.include_frames,
     });
     return r.markdown;
   });
@@ -236,7 +238,7 @@ export function registerTools(server: McpServer) {
   tool<{ video_id?: string; analysis_id?: string }>("get_analysis", {
     title: "Ver análise",
     description:
-      "Status (pending|processing|done|error) e conteúdo completo de uma análise: summary, transcript, structure, hook, categories, rules_fit (adequação às regras do Augusto), " +
+      "Status (pending|processing|done|error) e conteúdo completo de uma análise: summary, transcript, structure, hook, frames (o que aparece na tela segundo a segundo e o tom da voz), categories, rules_fit (adequação às regras do Augusto), " +
       "prompt e model. Passe analysis_id, ou video_id para a mais recente do vídeo.",
     inputSchema: {
       video_id: z.string().optional().describe("UUID do vídeo (traz a análise mais recente)"),
@@ -254,10 +256,10 @@ export function registerTools(server: McpServer) {
     return { analysis: slimAnalysis(analysis) };
   });
 
-  tool<{ analysis_id?: string; video_id?: string; summary?: string; transcript?: string; structure?: string; hook?: string; categories?: string[]; rules_fit?: string }>("save_analysis_fields", {
+  tool<{ analysis_id?: string; video_id?: string; summary?: string; transcript?: string; structure?: string; hook?: string; frames?: string; categories?: string[]; rules_fit?: string }>("save_analysis_fields", {
     title: "Preencher campos da análise",
     description:
-      "Preenche ou edita os campos de uma análise: summary, transcript, structure, hook, categories e rules_fit (adequação às regras do Augusto). " +
+      "Preenche ou edita os campos de uma análise: summary, transcript, structure, hook, frames (leitura frame a frame), categories e rules_fit (adequação às regras do Augusto). " +
       "Com analysis_id edita aquela análise. Só com video_id edita a mais recente do vídeo, ou cria uma nova (feita pelo Claude) se ele não tiver nenhuma. " +
       "Campos omitidos não mudam.",
     inputSchema: {
@@ -267,6 +269,7 @@ export function registerTools(server: McpServer) {
       transcript: z.string().optional(),
       structure: z.string().optional(),
       hook: z.string().optional(),
+      frames: z.string().optional().describe("Leitura visual segundo a segundo"),
       categories: z.array(z.string()).optional(),
       rules_fit: z.string().optional().describe("Adequação às regras do Augusto"),
     },

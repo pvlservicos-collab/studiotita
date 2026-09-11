@@ -294,6 +294,12 @@ function AnalysisView({ analysis, onSaved }: { analysis: AnalysisRow; onSaved: (
           />
           <GeminiField title="Gancho identificado pelo Gemini" value={analysis.hook} />
           <GeminiField title="Estrutura gerada pelo Gemini" value={analysis.structure} />
+          <GeminiField
+            title="Análise frame a frame do Gemini"
+            value={analysis.frames}
+            hint="o que aparece na tela segundo a segundo e como está a voz — é a base para montar as cenas"
+            collapsible
+          />
           <section className="rounded-xl border border-ink-100 bg-white/70 p-4">
             <div className="mb-2 flex items-center gap-2">
               <h3 className="text-sm font-semibold text-ink-900">Categorias</h3>
@@ -347,15 +353,34 @@ function AnalysisView({ analysis, onSaved }: { analysis: AnalysisRow; onSaved: (
 }
 
 /** Campo sempre gerado pelo Gemini: só leitura no painel, para ficar claro de onde veio. */
-function GeminiField({ title, value }: { title: string; value: string | null }) {
+function GeminiField({
+  title,
+  value,
+  hint,
+  collapsible = false,
+}: {
+  title: string;
+  value: string | null;
+  hint?: string;
+  collapsible?: boolean;
+}) {
+  const [aberto, setAberto] = useState(!collapsible);
   return (
     <section className="rounded-xl border border-ink-100 bg-white/70 p-4">
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold text-ink-900">{title}</h3>
         <span className="rounded-full bg-gold-50 px-2 py-0.5 text-[10.5px] font-medium text-gold-700">✦ Gemini</span>
+        {hint && <span className="text-[11px] text-ink-400">{hint}</span>}
       </div>
       {value ? (
-        <div className="whitespace-pre-wrap text-sm leading-relaxed text-ink-700">{value}</div>
+        <>
+          <div className={`whitespace-pre-wrap text-sm leading-relaxed text-ink-700 ${aberto ? "" : "line-clamp-6"}`}>{value}</div>
+          {collapsible && (
+            <button onClick={() => setAberto((a) => !a)} className="mt-1 text-xs font-medium text-gold-700 hover:underline">
+              {aberto ? "Recolher" : `Ver tudo (${value.split("\n").length} momentos)`}
+            </button>
+          )}
+        </>
       ) : (
         <p className="text-sm text-ink-400">Esta análise não tem este campo (foi feita com um prompt antigo). Peça uma nova análise.</p>
       )}

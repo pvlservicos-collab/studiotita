@@ -30,6 +30,7 @@ export default function ReportDialog({
   );
   const analyzed = videos.filter((v) => v.latest_analysis_status === "done").length;
   const [transcripts, setTranscripts] = useState(false);
+  const [frames, setFrames] = useState(false);
   const [report, setReport] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export default function ReportDialog({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/report?${reportQuery}${transcripts ? "&transcripts=1" : ""}`);
+      const res = await fetch(`/api/report?${reportQuery}${transcripts ? "&transcripts=1" : ""}${frames ? "&frames=1" : ""}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao gerar relatório.");
       setReport(data.markdown);
@@ -143,10 +144,16 @@ export default function ReportDialog({
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="flex items-center gap-2 text-sm text-ink-700">
-              <input type="checkbox" checked={transcripts} onChange={(e) => setTranscripts(e.target.checked)} className="accent-gold-600" />
-              Incluir as transcrições completas
-            </label>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm text-ink-700">
+                <input type="checkbox" checked={transcripts} onChange={(e) => setTranscripts(e.target.checked)} className="accent-gold-600" />
+                Incluir as transcrições
+              </label>
+              <label className="flex items-center gap-2 text-sm text-ink-700">
+                <input type="checkbox" checked={frames} onChange={(e) => setFrames(e.target.checked)} className="accent-gold-600" />
+                Incluir o frame a frame
+              </label>
+            </div>
             <button onClick={generate} disabled={loading} className="btn-gold rounded-lg px-4 py-2 text-sm font-semibold">
               {loading ? "Gerando..." : report ? "Gerar de novo" : "Gerar relatório"}
             </button>

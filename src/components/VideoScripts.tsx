@@ -22,6 +22,7 @@ type VideoScript = {
   transcript: string | null;
   structure: string | null;
   hook: string | null;
+  frames: string | null;
   categories: string[] | null;
   model: string | null;
   completed_at: string | null;
@@ -154,8 +155,9 @@ function VideoScriptCard({ s }: { s: VideoScript }) {
         {s.hook && <TextBlock title="Gancho identificado pelo Gemini" text={s.hook} />}
         {s.structure && <TextBlock title="Estrutura gerada pelo Gemini" text={s.structure} clamp={!open} />}
         {open && s.transcript && <TextBlock title="Roteiro (transcrição do Gemini)" text={s.transcript} />}
+        {open && s.frames && <TextBlock title="Análise frame a frame do Gemini" text={s.frames} />}
         <button onClick={() => setOpen((o) => !o)} className="text-xs font-medium text-gold-700 hover:underline">
-          {open ? "Recolher" : "Ver estrutura completa e transcrição"}
+          {open ? "Recolher" : "Ver estrutura, transcrição e frame a frame"}
         </button>
       </div>
     </GlassCard>
