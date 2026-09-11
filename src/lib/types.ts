@@ -46,6 +46,8 @@ export interface VideoRow {
   latest_analysis_status?: AnalysisStatus | null;
   latest_analysis_summary?: string | null;
   latest_analysis_categories?: string[] | null;
+  /** false = análise feita antes do frame a frame (dá para atualizar) */
+  latest_analysis_has_frames?: boolean | null;
 }
 
 export type AnalysisStatus = "pending" | "processing" | "done" | "error";

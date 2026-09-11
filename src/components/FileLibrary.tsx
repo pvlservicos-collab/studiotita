@@ -423,15 +423,18 @@ function FileModal({
   onDeleted: () => void;
 }) {
   const [file, setFile] = useState<FileRow | null>(null);
+  const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
+  const [salvo, setSalvo] = useState(false);
 
   useEffect(() => {
     fetch(`/api/files/${id}`)
       .then((r) => r.json())
       .then((d) => {
         setFile(d.file);
+        setName(d.file?.name ?? "");
         setCategory(d.file?.category ?? "outro");
         setDescription(d.file?.description ?? "");
       });
@@ -445,12 +448,16 @@ function FileModal({
 
   async function save() {
     setSaving(true);
-    await fetch(`/api/files/${id}`, {
+    const res = await fetch(`/api/files/${id}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ category, description }),
+      body: JSON.stringify({ name: name.trim() || file?.name, category, description }),
     });
+    const data = await res.json();
+    if (res.ok) setFile(data.file);
     setSaving(false);
+    setSalvo(true);
+    setTimeout(() => setSalvo(false), 2000);
     onChanged();
   }
 
@@ -488,32 +495,50 @@ function FileModal({
             </div>
             <div className="space-y-4 p-5">
               <div className="grid gap-3 sm:grid-cols-3">
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-700 outline-none"
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                  {!CATEGORIES.some((c) => c.id === category) && <option value={category}>{category}</option>}
-                </select>
-                <input
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Descrição (opcional)"
-                  className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-gold-400 sm:col-span-2"
-                />
+                <label className="space-y-1 sm:col-span-2">
+                  <span className="block text-xs font-medium text-ink-600">Nome do arquivo</span>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="ex.: metodo-roteiro-augusto.md"
+                    className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-gold-400"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="block text-xs font-medium text-ink-600">Categoria</span>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-700 outline-none"
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                    {!CATEGORIES.some((c) => c.id === category) && <option value={category}>{category}</option>}
+                  </select>
+                </label>
+                <label className="space-y-1 sm:col-span-3">
+                  <span className="block text-xs font-medium text-ink-600">Descrição (ajuda o Claude a achar o arquivo)</span>
+                  <input
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="do que se trata e para que serve"
+                    className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm outline-none focus:border-gold-400"
+                  />
+                </label>
               </div>
-              <div className="flex justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <button onClick={remove} className="text-xs text-rose-600 hover:underline">
                   Apagar arquivo
                 </button>
-                <button onClick={save} disabled={saving} className="btn-gold rounded-lg px-4 py-1.5 text-xs font-semibold">
-                  {saving ? "Salvando..." : "Salvar"}
-                </button>
+                <div className="flex items-center gap-3">
+                  {salvo && <span className="text-xs text-emerald-700">Salvo ✓</span>}
+                  <button onClick={save} disabled={saving} className="btn-gold rounded-lg px-4 py-1.5 text-xs font-semibold">
+                    {saving ? "Salvando..." : "Salvar nome, categoria e descrição"}
+                  </button>
+                </div>
               </div>
               {file.content_type?.startsWith("image/") && file.blob_url ? (
                 // eslint-disable-next-line @next/next/no-img-element

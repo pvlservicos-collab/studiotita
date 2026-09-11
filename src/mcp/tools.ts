@@ -235,25 +235,27 @@ export function registerTools(server: McpServer) {
     return { analysis: slimAnalysis(analysis), note: "Análise iniciada. Consulte get_analysis com o video_id em ~30s." };
   });
 
-  tool<{ scope?: "own" | "competitor" | "hashtag" | "all"; competitor_id?: string; hashtag?: string; limit?: number }>("analyze_missing_videos", {
+  tool<{ scope?: "own" | "competitor" | "hashtag" | "all"; competitor_id?: string; hashtag?: string; limit?: number; include_outdated?: boolean }>("analyze_missing_videos", {
     title: "Analisar os vídeos que faltam",
     description:
       "Dispara a análise do Gemini nos vídeos que ainda NÃO têm análise (os já analisados ficam de fora), até o limite pedido. " +
+      "Com include_outdated=true, entram também os analisados antes do frame a frame existir (latest_analysis_has_frames = false). " +
       "Cada vídeo leva de 30 a 60 segundos e consome a API do Gemini: confirme com o usuário antes e prefira lotes de até 5. " +
       "Devolve quantos começaram e quantos ainda faltam; acompanhe com get_analysis e chame de novo para continuar.",
     inputSchema: {
       ...scopeSchema,
       limit: z.number().int().min(1).max(10).optional().describe("Quantos disparar agora (padrão 5)"),
+      include_outdated: z.boolean().optional().describe("Incluir análises antigas, sem o frame a frame"),
     },
-  }, async ({ scope, competitor_id, hashtag, limit }) => {
+  }, async ({ scope, competitor_id, hashtag, limit, include_outdated }) => {
     const videos = await listVideos({ scope, competitorId: competitor_id, hashtag });
     const pendentes = videos.filter(
       (v) =>
-        v.latest_analysis_status !== "done" &&
+        v.media_type !== "IMAGE" &&
+        v.media_type !== "CAROUSEL_ALBUM" &&
         v.latest_analysis_status !== "pending" &&
         v.latest_analysis_status !== "processing" &&
-        v.media_type !== "IMAGE" &&
-        v.media_type !== "CAROUSEL_ALBUM"
+        (v.latest_analysis_status !== "done" || (include_outdated === true && v.latest_analysis_has_frames === false))
     );
     const lote = pendentes.slice(0, limit ?? 5);
     for (const v of lote) await requestAnalysis(v.id, `claude_code:${getActor()}`);

@@ -162,21 +162,32 @@ export default function VideoBrowser({
       v.media_type !== "CAROUSEL_ALBUM"
   );
 
-  async function analyzeAllMissing() {
-    if (!pendentes.length) return;
-    if (
-      !confirm(
-        `Analisar com o Gemini os ${pendentes.length} vídeos que ainda não têm análise? Os já analisados não entram. ` +
-          `Cada vídeo leva de 30 a 60 segundos e consome a API do Gemini; rodam 3 por vez e você pode fechar esta janela depois que começar.`
-      )
-    )
-      return;
-    await analyzeQueue(pendentes.map((v) => v.id), (s) => {
+  /** Analisados antes do frame a frame existir: dá para atualizar. */
+  const desatualizados = videos.filter((v) => v.latest_analysis_status === "done" && v.latest_analysis_has_frames === false);
+
+  async function rodarFila(lista: VideoRow[], texto: string) {
+    if (!lista.length) return;
+    if (!confirm(texto)) return;
+    await analyzeQueue(lista.map((v) => v.id), (s) => {
       setBatch(s);
       if ((s.done + s.failed) % 3 === 0) load();
     });
     load();
   }
+
+  const analyzeAllMissing = () =>
+    rodarFila(
+      pendentes,
+      `Analisar com o Gemini os ${pendentes.length} vídeos que ainda não têm análise? Os já analisados não entram. ` +
+        `Cada vídeo leva de 30 a 60 segundos e consome a API do Gemini; rodam 3 por vez e você pode fechar esta janela depois que começar.`
+    );
+
+  const atualizarAntigas = () =>
+    rodarFila(
+      desatualizados,
+      `Refazer a análise dos ${desatualizados.length} vídeos analisados antes do frame a frame? ` +
+        `Eles ganham a leitura da tela segundo a segundo. A análise antiga continua no histórico. Consome a API do Gemini.`
+    );
 
   async function analyzeSelected() {
     const pending = shown.filter(
@@ -276,6 +287,16 @@ export default function VideoBrowser({
           >
             {pendentes.length ? `✦ Analisar os ${pendentes.length} sem análise` : "✦ Todos já analisados"}
           </button>
+          {desatualizados.length > 0 && (
+            <button
+              onClick={atualizarAntigas}
+              disabled={batch != null && batch.done + batch.failed < batch.total}
+              title="Estes vídeos foram analisados antes do frame a frame existir"
+              className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+            >
+              Atualizar {desatualizados.length} análise{desatualizados.length === 1 ? "" : "s"} sem frame a frame
+            </button>
+          )}
         </div>
         {actions}
       </div>

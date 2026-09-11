@@ -8,7 +8,8 @@ const SELECT_VIDEOS = `
          la.id        as latest_analysis_id,
          la.status    as latest_analysis_status,
          la.summary   as latest_analysis_summary,
-         ld.categories as latest_analysis_categories
+         ld.categories as latest_analysis_categories,
+         (ld.frames is not null and ld.frames <> '') as latest_analysis_has_frames
   from videos v
   left join competitors c on c.id = v.competitor_id
   left join lateral (
@@ -16,7 +17,7 @@ const SELECT_VIDEOS = `
     where a.video_id = v.id order by a.requested_at desc limit 1
   ) la on true
   left join lateral (
-    select categories from analyses a
+    select categories, frames from analyses a
     where a.video_id = v.id and a.status = 'done' order by a.requested_at desc limit 1
   ) ld on true`;
 
