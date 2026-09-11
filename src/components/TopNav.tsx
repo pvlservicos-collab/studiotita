@@ -17,9 +17,8 @@ export default function TopNav() {
   return (
     <header className="glass-strong sticky top-4 z-20 flex flex-wrap items-center justify-between gap-4 rounded-2xl px-5 py-4 shadow-glass">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-gold-300 to-gold-600 text-sm font-bold text-white shadow-goldGlow">
-          IG
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png" alt="Logo" width={36} height={36} className="h-9 w-9 rounded-xl shadow-goldGlow" />
         <div>
           <div className="text-sm font-semibold tracking-tight text-ink-900">Videoteca IG</div>
           <div className="text-[11px] text-ink-400">insights &amp; roteiros</div>
