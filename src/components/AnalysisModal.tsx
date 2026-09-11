@@ -60,7 +60,7 @@ export default function AnalysisModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink-900/40 p-3 backdrop-blur-sm sm:p-8" onClick={onClose}>
-      <div className="glass-strong w-full max-w-4xl rounded-2xl bg-white/95 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-4xl rounded-2xl border border-gold-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* cabeçalho com capa + métricas do vídeo */}
         <div className="flex gap-4 border-b border-ink-100 p-4 sm:p-5">
           <div className="aspect-[9/16] w-20 flex-shrink-0 overflow-hidden rounded-lg bg-ink-100 sm:w-24">

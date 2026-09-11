@@ -379,7 +379,7 @@ function FileModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink-900/40 p-3 backdrop-blur-sm sm:p-8" onClick={onClose}>
-      <div className="w-full max-w-3xl rounded-2xl bg-white/95 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-3xl rounded-2xl border border-gold-200 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {!file ? (
           <p className="p-6 text-sm text-ink-400">Carregando...</p>
         ) : (
