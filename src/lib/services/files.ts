@@ -4,6 +4,8 @@
  * files.text_content, que é o que o Claude do Augusto lê e pesquisa.
  */
 import { put, del } from "@vercel/blob";
+import { waitUntil } from "@vercel/functions";
+import { generateJsonWithGemini } from "@/lib/gemini";
 import { getPool, query, queryOne } from "@/lib/db";
 import { splitIntoSections } from "@/lib/sections";
 import type { FileRow } from "@/lib/types";
@@ -163,7 +165,21 @@ export async function registerUploadedFile(input: RegisterUploadInput): Promise<
   );
   if (!row) throw new Error("Falha ao registrar arquivo.");
   await rebuildSections(row.id, text, row.name, row.category);
+  if (!row.description && text) waitUntil(describeFile(row.id, row.name, text).catch(() => {}));
   return row;
+}
+
+/** Descrição curta gerada pelo Gemini a partir do começo do texto (roda depois da resposta). */
+export async function describeFile(id: string, name: string, text: string) {
+  const { result } = await generateJsonWithGemini<{ descricao: string }>(
+    `Leia o começo do arquivo "${name}" da biblioteca do Augusto Weber (mentor de gestão de tempo e produtividade) ` +
+      `e escreva uma descrição curta, em português, de 1 ou 2 frases: do que se trata e para que serve. ` +
+      `Sem introdução, só a descrição.\n\n---\n${text.slice(0, 6000)}`,
+    { type: "OBJECT", properties: { descricao: { type: "STRING" } }, required: ["descricao"] }
+  );
+  if (result.descricao) {
+    await query(`update files set description = $2 where id = $1 and description is null`, [id, result.descricao.trim()]);
+  }
 }
 
 export interface CreateTextFileInput {
@@ -207,6 +223,7 @@ export async function createTextFile(input: CreateTextFileInput): Promise<FileRo
   );
   if (!row) throw new Error("Falha ao criar arquivo.");
   await rebuildSections(row.id, input.text, row.name, row.category);
+  if (!row.description) waitUntil(describeFile(row.id, row.name, input.text).catch(() => {}));
   return row;
 }
 

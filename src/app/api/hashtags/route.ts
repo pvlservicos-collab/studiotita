@@ -3,7 +3,7 @@ import { getHashtagQuota, listHashtagSearches, searchHashtag } from "@/lib/servi
 import { apiErrorResponse } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /** Histórico de buscas + cota da semana (30 hashtags diferentes a cada 7 dias). */
 export async function GET() {
@@ -15,11 +15,13 @@ export async function GET() {
   }
 }
 
-/** { hashtag, edge: "top_media" | "recent_media" } */
+/** { hashtag, edge: "top_media" | "recent_media", limit? } */
 export async function POST(req: NextRequest) {
   try {
-    const { hashtag, edge } = await req.json();
-    return NextResponse.json(await searchHashtag(String(hashtag ?? ""), edge === "recent_media" ? "recent_media" : "top_media"));
+    const { hashtag, edge, limit } = await req.json();
+    return NextResponse.json(
+      await searchHashtag(String(hashtag ?? ""), edge === "recent_media" ? "recent_media" : "top_media", Math.min(Math.max(Number(limit) || 50, 5), 100))
+    );
   } catch (err) {
     return apiErrorResponse(err);
   }

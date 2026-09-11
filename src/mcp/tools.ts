@@ -21,7 +21,9 @@ import {
   searchLibrary,
   FILE_CATEGORIES,
 } from "@/lib/services/files";
-import { listCategories, setCategorySelection, compileCategoryScripts, generateCategoryScript } from "@/lib/services/categories";
+import { listCategories, setCategorySelection, compileCategoryScripts } from "@/lib/services/categories";
+import { generateCategoryScript, generateScript } from "@/lib/services/scriptGenerator";
+import { listVideoScripts } from "@/lib/services/videoScripts";
 import { addCompetitors, getOwnStats, listCompetitors, removeCompetitor, syncCompetitor } from "@/lib/services/competitors";
 import { getHashtagQuota, listHashtagSearches, searchHashtag } from "@/lib/services/hashtags";
 import { buildReport, selectPosts } from "@/lib/services/report";
@@ -125,18 +127,19 @@ export function registerTools(server: McpServer) {
   });
 
   // ---------------------------------------------------- posts e métricas
-  tool<{ scope?: "own" | "competitor" | "hashtag" | "all"; competitor_id?: string; hashtag?: string; sort_by?: string; limit?: number }>("list_videos", {
+  tool<{ scope?: "own" | "competitor" | "hashtag" | "all"; competitor_id?: string; hashtag?: string; search?: string; sort_by?: string; limit?: number }>("list_videos", {
     title: "Listar vídeos com métricas",
     description:
       "Lista vídeos com todas as métricas (colunas + campo metrics), status da última análise e categorias. Padrão: vídeos do Augusto. " +
       "sort_by: recent (padrão) ou qualquer métrica (views, reach, likes, comments, shares, saved, reposts, ig_reels_avg_watch_time, reels_skip_rate...).",
     inputSchema: {
       ...scopeSchema,
+      search: z.string().optional().describe("Busca uma palavra na legenda, na transcrição e nas categorias"),
       sort_by: z.string().optional().describe("recent ou o nome de uma métrica"),
       limit: z.number().int().positive().optional().describe("Máximo de vídeos (padrão: todos)"),
     },
-  }, async ({ scope, competitor_id, hashtag, sort_by, limit }) => {
-    let videos = await listVideos({ scope, competitorId: competitor_id, hashtag });
+  }, async ({ scope, competitor_id, hashtag, search, sort_by, limit }) => {
+    let videos = await listVideos({ scope, competitorId: competitor_id, hashtag, search });
     if (sort_by && sort_by !== "recent") {
       const value = (v: VideoRow) =>
         v.metrics?.[sort_by] ?? (v as unknown as Record<string, number>)[sort_by === "saved" ? "saves" : sort_by] ?? -1;
@@ -324,18 +327,87 @@ export function registerTools(server: McpServer) {
     inputSchema: { category: z.string() },
   }, async ({ category }) => (await compileCategoryScripts(category)).markdown);
 
-  tool<{ category: string; instructions?: string }>("generate_category_script", {
+  tool<{ category: string; instructions?: string; scenes?: boolean }>("generate_category_script", {
     title: "Gerar roteiro novo da categoria",
     description:
       "Pede ao Gemini (texto) um roteiro novo da categoria com base nos vídeos ligados, seguindo o método e a estrutura do Augusto da biblioteca. " +
-      "instructions substitui as instruções padrão (os vídeos de referência são sempre anexados). Salva em Roteiros com source 'gemini'. Consome a API do Gemini.",
-    inputSchema: { category: z.string(), instructions: z.string().optional() },
-  }, async ({ category, instructions }) => ({ script: await generateCategoryScript(category, instructions, `claude_code:${getActor()}`) }));
+      "instructions substitui as instruções padrão (os vídeos de referência são sempre anexados). scenes=true pede também as cenas do Estúdio Reels. " +
+      "Salva em Roteiros com source 'gemini'. Consome a API do Gemini.",
+    inputSchema: { category: z.string(), instructions: z.string().optional(), scenes: z.boolean().optional() },
+  }, async ({ category, instructions, scenes }) => ({
+    script: await generateCategoryScript(category, instructions, `claude_code:${getActor()}`, Boolean(scenes)),
+  }));
+
+  tool<{
+    random?: boolean;
+    best_period?: "30d" | "last_month" | "quarter" | "semester";
+    best_metric?: "views" | "saves" | "shares" | "comments" | "likes" | "engagement";
+    best_top?: number;
+    categories?: string[];
+    competitor_ids?: string[];
+    subject?: string;
+    video_search?: string;
+    video_search_metric?: "views" | "saves" | "shares" | "comments" | "likes" | "engagement";
+    library_search?: string;
+    instructions?: string;
+    scenes?: boolean;
+  }>("create_script", {
+    title: "Criar roteiro (gerador)",
+    description:
+      "O mesmo da tela 'Criar roteiro': pede ao Gemini um roteiro novo no método e na estrutura do Augusto, combinando as fontes que você escolher: " +
+      "random=true (seleção aleatória do conteúdo dele), melhores vídeos (best_period + best_metric + best_top), categorias (do Augusto ou '@concorrente+Categoria'), " +
+      "competitor_ids (os vídeos mais vistos e já analisados de cada concorrente), subject (assunto específico), library_search (trechos das aulas da Biblioteca), " +
+      "instructions (extras) e scenes=true (ideias de cena do Estúdio Reels). Salva em Roteiros gerados, com pontuação pelas referências. Consome a API do Gemini.",
+    inputSchema: {
+      random: z.boolean().optional(),
+      best_period: z.enum(["30d", "last_month", "quarter", "semester"]).optional(),
+      best_metric: z.enum(["views", "saves", "shares", "comments", "likes", "engagement"]).optional(),
+      best_top: z.number().int().min(1).max(20).optional(),
+      categories: z.array(z.string()).optional(),
+      competitor_ids: z.array(z.string()).optional(),
+      subject: z.string().optional(),
+      video_search: z.string().optional().describe("Palavra buscada nos vídeos analisados: entram os 5 melhores que falam disso"),
+      video_search_metric: z.enum(["views", "saves", "shares", "comments", "likes", "engagement"]).optional(),
+      library_search: z.string().optional(),
+      instructions: z.string().optional(),
+      scenes: z.boolean().optional(),
+    },
+  }, async (o) => ({
+    script: await generateScript(
+      {
+        random: o.random,
+        best: o.best_period ? { period: o.best_period, metric: o.best_metric ?? "views", top: o.best_top ?? 5 } : null,
+        categories: o.categories,
+        competitorIds: o.competitor_ids,
+        subject: o.subject,
+        videoSearch: o.video_search ? { term: o.video_search, metric: o.video_search_metric ?? "views", top: 5 } : null,
+        librarySearch: o.library_search,
+        instructions: o.instructions,
+        scenes: o.scenes,
+      },
+      `claude_code:${getActor()}`
+    ),
+  }));
+
+  tool<{ scope?: "own" | "competitor" | "all"; competitor_id?: string; search?: string; limit?: number }>("list_video_scripts", {
+    title: "Roteiros extraídos dos vídeos",
+    description:
+      "Os roteiros que o Gemini extraiu dos vídeos analisados (gancho, estrutura com gatilhos e emoções, transcrição, categorias), do Augusto e dos concorrentes. " +
+      "É a biblioteca permanente de referência. search procura na legenda, na transcrição e nas categorias.",
+    inputSchema: {
+      scope: z.enum(["own", "competitor", "all"]).optional(),
+      competitor_id: z.string().optional(),
+      search: z.string().optional(),
+      limit: z.number().int().min(1).max(500).optional(),
+    },
+  }, async (o) => ({ scripts: await listVideoScripts({ scope: o.scope, competitorId: o.competitor_id, search: o.search, limit: o.limit ?? 50 }) }));
 
   // ------------------------------------------------------------ roteiros
   tool("list_scripts", {
     title: "Listar roteiros",
-    description: "Roteiros salvos: título, roteiro completo, gancho, estrutura, categoria, origem (manual, claude_code, gemini), status e vínculo com vídeo.",
+    description:
+      "Roteiros gerados/salvos: título, roteiro completo, gancho, estrutura, cenas do Estúdio Reels, categoria, origem (manual, claude_code, gemini), status, " +
+      "vínculo com vídeo e pontuação interna (0-100: resultado real do vídeo publicado ou média dos vídeos de referência).",
     inputSchema: {},
   }, async () => ({ scripts: await listScripts() }));
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listCategories, setCategorySelection, compileCategoryScripts, defaultGenerationInstructions } from "@/lib/services/categories";
+import { listCategories, setCategorySelection, compileCategoryScripts } from "@/lib/services/categories";
+import { defaultGenerationInstructions } from "@/lib/services/scriptGenerator";
 import { apiErrorResponse } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";

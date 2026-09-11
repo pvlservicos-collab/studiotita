@@ -5,17 +5,20 @@ import { GlassCard, EmptyState } from "@/components/ui";
 import VideoCard, { isBusy, type PollState } from "@/components/VideoCard";
 import AnalysisModal from "@/components/AnalysisModal";
 import ReportDialog from "@/components/ReportDialog";
-import { PERIODS, RANK_METRICS, selectBest, type PeriodId, type RankMetric } from "@/lib/periods";
+import { analyzeQueue } from "@/lib/analyzeQueue";
+import { PERIODS, RANK_METRICS, rankValue, selectBest, type PeriodId, type RankMetric } from "@/lib/periods";
 import type { AnalysisStatus, VideoRow } from "@/lib/types";
 
-type SortKey = "recent" | "views" | "saved" | "shares" | "comments";
+type SortKey = "recent" | "views" | "likes" | "comments" | "shares" | "saved" | "engagement";
 
 const SORTS: { id: SortKey; label: string; value: (v: VideoRow) => number }[] = [
   { id: "recent", label: "Mais recentes", value: (v) => new Date(v.posted_at ?? v.created_at).getTime() },
-  { id: "views", label: "Mais views", value: (v) => v.views ?? -1 },
-  { id: "saved", label: "Mais salvos", value: (v) => v.saves ?? -1 },
-  { id: "shares", label: "Mais compartilhados", value: (v) => v.shares ?? -1 },
-  { id: "comments", label: "Mais comentados", value: (v) => v.comments ?? -1 },
+  { id: "views", label: "Mais visualizações", value: (v) => v.views ?? -1 },
+  { id: "likes", label: "Mais curtidas", value: (v) => v.likes ?? -1 },
+  { id: "comments", label: "Mais comentários", value: (v) => v.comments ?? -1 },
+  { id: "shares", label: "Mais compartilhamentos", value: (v) => v.shares ?? -1 },
+  { id: "saved", label: "Mais salvamentos", value: (v) => v.saves ?? -1 },
+  { id: "engagement", label: "Maior engajamento", value: (v) => rankValue(v, "engagement") },
 ];
 
 const selectCls = "rounded-xl border border-ink-200 bg-white/70 px-3 py-2 text-sm text-ink-700 outline-none";
@@ -33,6 +36,8 @@ export default function VideoBrowser({
   emptyTitle = "Nenhum vídeo ainda",
   emptyDescription,
   metricsNote,
+  selectable = false,
+  categoryFilter = false,
 }: {
   /** filtro de /api/videos e /api/report, ex.: "scope=own" ou "scope=competitor&competitor_id=..." */
   scopeQuery: string;
@@ -42,7 +47,14 @@ export default function VideoBrowser({
   emptyTitle?: string;
   emptyDescription?: string;
   metricsNote?: string;
+  /** caixas de seleção nos cards + "Gerar relatório com o Gemini" para os marcados */
+  selectable?: boolean;
+  /** filtro pelas categorias que o Gemini gerou (aparece conforme os vídeos são analisados) */
+  categoryFilter?: boolean;
 }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batch, setBatch] = useState<{ done: number; failed: number; total: number } | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
   const [videos, setVideos] = useState<VideoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +64,8 @@ export default function VideoBrowser({
   const [metric, setMetric] = useState<RankMetric>("views");
   const [top, setTop] = useState(10);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [reportOpen, setReportOpen] = useState(false);
   const [polls, setPolls] = useState<Record<string, PollState>>({});
   const timers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
@@ -59,7 +73,7 @@ export default function VideoBrowser({
   async function load() {
     setError(null);
     try {
-      const res = await fetch(`/api/videos?${scopeQuery}`);
+      const res = await fetch(`/api/videos?${scopeQuery}${searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ""}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao carregar vídeos.");
       setVideos(data.videos);
@@ -77,7 +91,13 @@ export default function VideoBrowser({
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeQuery, reloadToken]);
+  }, [scopeQuery, reloadToken, searchTerm]);
+
+  // busca por palavra (legenda, transcrição e categorias), com uma pausa ao digitar
+  useEffect(() => {
+    const t = setTimeout(() => setSearchTerm(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     const current = timers.current;
@@ -112,8 +132,43 @@ export default function VideoBrowser({
   }, [videos, sort]);
 
   const best = useMemo(() => selectBest([...videos], period, metric, top || undefined), [videos, period, metric, top]);
-  const shown = tab === "best" ? best.videos : all;
-  const reportQuery = `${scopeQuery}&mode=${tab}${tab === "best" ? `&period=${period}&metric=${metric}${top ? `&top=${top}` : ""}` : ""}`;
+
+  // categorias do Gemini com a origem na frente (@concorrente+Categoria)
+  const prefix = (v: VideoRow) => (v.source === "competitor" ? `@${v.competitor_username}+` : v.source === "hashtag" ? `#${v.hashtag}+` : "");
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const v of videos) for (const c of v.latest_analysis_categories ?? []) counts.set(`${prefix(v)}${c}`, (counts.get(`${prefix(v)}${c}`) ?? 0) + 1);
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [videos]);
+  const byCategory = (list: VideoRow[]) =>
+    category ? list.filter((v) => (v.latest_analysis_categories ?? []).some((c) => `${prefix(v)}${c}` === category)) : list;
+  const shown = byCategory(tab === "best" ? best.videos : all);
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function analyzeSelected() {
+    const pending = shown.filter(
+      (v) => selected.has(v.id) && v.latest_analysis_status !== "done" && !isBusy(v.latest_analysis_status) && v.media_type !== "IMAGE" && v.media_type !== "CAROUSEL_ALBUM"
+    );
+    if (!pending.length) return alert("Os vídeos marcados já têm relatório do Gemini (ou são imagens).");
+    if (!confirm(`Gerar o relatório do Gemini de ${pending.length} vídeos? Cada um consome a API do Gemini (~30-60s, 3 por vez).`)) return;
+    await analyzeQueue(pending.map((v) => v.id), (s) => {
+      setBatch(s);
+      if (s.done + s.failed > 0) load();
+    });
+    setSelected(new Set());
+    load();
+  }
+  const reportQuery = `${scopeQuery}&mode=${tab}${searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : ""}${
+    tab === "best" ? `&period=${period}&metric=${metric}${top ? `&top=${top}` : ""}` : ""
+  }`;
   const openVideo = videos.find((v) => v.id === openId) ?? null;
 
   return (
@@ -171,6 +226,12 @@ export default function VideoBrowser({
               </select>
             </>
           )}
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar palavra na legenda, transcrição ou categoria..."
+            className="min-w-[240px] flex-1 rounded-xl border border-ink-200 bg-white/70 px-3 py-2 text-sm outline-none focus:border-gold-400"
+          />
           <button
             onClick={() => setReportOpen(true)}
             disabled={!shown.length}
@@ -181,6 +242,67 @@ export default function VideoBrowser({
         </div>
         {actions}
       </div>
+
+      {categoryFilter && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {categoryCounts.length === 0 ? (
+            <span className="group relative">
+              <button disabled className="cursor-not-allowed rounded-full border border-ink-200 bg-ink-100 px-3 py-1.5 text-xs font-medium text-ink-400">
+                Filtrar por categoria
+              </button>
+              <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-72 rounded-lg bg-ink-900 px-3 py-2 text-xs leading-snug text-white shadow-lg group-hover:block">
+                Primeiro gere os relatórios com o Gemini: marque os vídeos e clique em “Gerar relatório com o Gemini”. As categorias vão
+                aparecendo aqui conforme cada vídeo é analisado.
+              </span>
+            </span>
+          ) : (
+            <>
+              <span className="text-xs text-ink-500">Categorias do Gemini:</span>
+              <button
+                onClick={() => setCategory(null)}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${!category ? "btn-gold" : "bg-ink-100 text-ink-600 hover:bg-ink-200"}`}
+              >
+                Todas
+              </button>
+              {categoryCounts.map(([name, n]) => (
+                <button
+                  key={name}
+                  onClick={() => setCategory(category === name ? null : name)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${category === name ? "btn-gold" : "bg-ink-100 text-ink-600 hover:bg-ink-200"}`}
+                >
+                  {name} · {n}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {selectable && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl bg-white/60 px-3 py-2">
+          <label className="flex items-center gap-2 text-sm text-ink-700">
+            <input
+              type="checkbox"
+              className="accent-gold-600"
+              checked={shown.length > 0 && shown.every((v) => selected.has(v.id))}
+              onChange={(e) => setSelected(e.target.checked ? new Set(shown.map((v) => v.id)) : new Set())}
+            />
+            Selecionar todos ({shown.length})
+          </label>
+          <button
+            onClick={analyzeSelected}
+            disabled={!selected.size || (batch != null && batch.done + batch.failed < batch.total)}
+            className="btn-gold rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+          >
+            ✦ Gerar relatório com o Gemini ({selected.size})
+          </button>
+          {batch && (
+            <span className="text-xs text-ink-500">
+              {batch.done} prontos · {batch.failed} com erro · {batch.total - batch.done - batch.failed} na fila
+            </span>
+          )}
+        </div>
+      )}
 
       {tab === "best" && (
         <p className="text-xs text-ink-500">
@@ -208,7 +330,19 @@ export default function VideoBrowser({
                   {i + 1}
                 </span>
               )}
-              <VideoCard video={video} poll={polls[video.id]} onOpen={() => setOpenId(video.id)} />
+              <VideoCard
+                video={video}
+                poll={polls[video.id]}
+                onOpen={() => setOpenId(video.id)}
+                extra={
+                  selectable ? (
+                    <label className="flex cursor-pointer items-center gap-2 text-[11px] font-medium text-ink-600">
+                      <input type="checkbox" className="accent-gold-600" checked={selected.has(video.id)} onChange={() => toggleSelected(video.id)} />
+                      {video.latest_analysis_status === "done" ? "Selecionado (já tem relatório)" : "Selecionar para o relatório"}
+                    </label>
+                  ) : undefined
+                }
+              />
             </div>
           ))}
         </div>

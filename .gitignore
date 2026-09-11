@@ -32,3 +32,6 @@ Thumbs.db
 # material privado do Augusto (vai para a Biblioteca pelo npm run import:base, não para o git)
 /arquivos base/
 /icone.png
+
+# cópia de trabalho do Estúdio Reels (a versão publicada fica em public/estudio-reels.html)
+/estudio-reels.html

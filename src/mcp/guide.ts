@@ -13,7 +13,7 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
   {
     group: "Posts e métricas",
     tools: [
-      { name: "list_videos", what: "Vídeos (do Augusto, de um concorrente ou de uma hashtag) com métricas, status da análise e categorias." },
+      { name: "list_videos", what: "Vídeos (do Augusto, de um concorrente ou de uma hashtag) com métricas, status da análise e categorias. Busca por palavra e ordenação por qualquer métrica." },
       { name: "get_best_posts", what: "Melhores posts de um período (30 dias, último mês, trimestre, semestre) por qualquer métrica." },
       { name: "get_posts_report", what: "Relatório em Markdown de todos os posts ou dos melhores: métricas + tudo o que o Gemini gerou." },
       { name: "get_video", what: "Um vídeo com métricas completas e todas as análises." },
@@ -29,6 +29,13 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
       { name: "request_video_analysis", what: "Manda o vídeo ao Gemini: resumo, transcrição, estrutura por segundo, gancho e categorias." },
       { name: "get_analysis", what: "Status e conteúdo completo de uma análise (por video_id ou analysis_id)." },
       { name: "save_analysis_fields", what: "Preenche/edita resumo, transcrição, estrutura, gancho, categorias e adequação às regras do Augusto." },
+    ],
+  },
+  {
+    group: "Criar roteiro",
+    tools: [
+      { name: "create_script", what: "Gera um roteiro novo combinando melhores vídeos, categorias, concorrentes, assunto, trechos das aulas e cenas do Estúdio Reels (ou aleatório)." },
+      { name: "list_video_scripts", what: "Roteiros extraídos dos vídeos analisados (Augusto e concorrentes): a biblioteca de referência." },
     ],
   },
   {
@@ -92,9 +99,11 @@ O app guarda os reels com as métricas da Meta, as análises do Gemini, os rotei
 
 COMO O APP FUNCIONA
 - Posts: sync_videos_from_meta atualiza os reels do Augusto. Cada vídeo tem colunas (views, reach, likes, comments, shares, saves) e o campo "metrics" com tudo o que a Meta informa: ${metricLegend}. Use esses números para decidir (salvamentos e compartilhamentos altos = conteúdo de valor; taxa de pulo alta = gancho fraco). get_best_posts faz o recorte "Melhores posts" por período; get_posts_report gera o relatório completo.
-- Análises: request_video_analysis manda o vídeo ao Gemini. A resposta sempre volta em: summary (resumo), transcript (transcrição), structure (estrutura narrativa parte por parte com os segundos), hook (gancho: fala, texto na tela, visual, duração e técnica) e categories (temas). Esses campos são sempre gerados pelo Gemini. O prompt e o modelo usados ficam gravados. Leva ~30-60s; acompanhe com get_analysis. Cada análise consome a API do Gemini: só dispare quando o usuário pedir.
+- Análises: request_video_analysis manda o vídeo ao Gemini. A resposta sempre volta em: summary (resumo), transcript (transcrição), structure (engenharia reversa de marketing: cada parte com os segundos, a função, o gatilho mental, a emoção e como foi construída, mais o arco da narrativa e os aprendizados para replicar), hook (gancho: fala, texto na tela, visual, duração e técnica) e categories (temas).
+- Dois tipos de roteiro: os EXTRAÍDOS dos vídeos (list_video_scripts: o que o Gemini tirou de cada vídeo analisado, do Augusto e dos concorrentes, guardados para sempre) e os GERADOS (list_scripts: criados pelo gerador, pelo Claude ou à mão). Cada roteiro gerado tem uma pontuação interna 0-100 pelos números dos vídeos de referência (ou do vídeo publicado, se estiver ligado a um).
+- Criar roteiro: create_script combina fontes (melhores vídeos do período, busca por palavra nos vídeos analisados, categorias, concorrentes, assunto, trechos das aulas) ou random=true; scenes=true pede ideias de cena do Estúdio Reels (a ferramenta de telas do Augusto: números grandes, perguntas, listas, pentágono das 168h, agenda dos Faróis, gráficos, metas, mapa mental, sono). Esses campos são sempre gerados pelo Gemini. O prompt e o modelo usados ficam gravados. Leva ~30-60s; acompanhe com get_analysis. Cada análise consome a API do Gemini: só dispare quando o usuário pedir.
 - Adequação às regras do Augusto (rules_fit): começa vazia. Preencha com save_analysis_fields quando o usuário pedir, comparando a transcrição com o método (arquivos de método e briefing da biblioteca).
-- Categorias: vêm das análises. list_categories mostra a curadoria; vídeos desligados (set_category_video) não entram em get_category_scripts nem em generate_category_script. generate_category_script usa os arquivos "prompt-roteiros-ascensao-tita.md" e "estrutura-roteiro-reel.md" da biblioteca.
+- Categorias: vêm das análises. As do Augusto têm só o nome ("Política"); as de concorrentes e hashtags levam a origem ("@eslendelanogare+Política", "#tempo+Política"). list_categories mostra a curadoria; vídeos desligados (set_category_video) não entram em get_category_scripts nem em generate_category_script. generate_category_script usa os arquivos "prompt-roteiros-ascensao-tita.md" e "estrutura-roteiro-reel.md" da biblioteca.
 - Concorrência: add_competitors aceita links/@ de contas profissionais. Os vídeos deles ficam em list_videos(scope="competitor", competitor_id=...) e podem ser analisados pelo Gemini como os do Augusto (se a Meta não liberar o arquivo por música licenciada, o usuário envia o vídeo pelo painel). De concorrentes e hashtags a Meta informa views/curtidas/comentários; salvamentos, compartilhamentos e alcance ficam nulos. search_hashtag: no máximo 30 hashtags DIFERENTES por 7 dias (repetir não gasta); confira a cota com list_hashtag_searches antes.
 - Biblioteca: os arquivos estão divididos em seções com título (as Bases de Ensino têm ~2 mil passagens cada, com a sessão de origem "— S01"). Prefira search_library e get_file_section a ler arquivos inteiros. Siga as regras de fidelidade do arquivo "instrucoes_do_projeto.md": nunca invente falas do Augusto, cite verbatim.
 - Roteiros: save_script / update_script / delete_scripts. Campos: title, full_script, hook (primeiros 3s), structure, status (draft|ready|published|archived), category, video_id opcional.

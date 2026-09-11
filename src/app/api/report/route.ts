@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
       scope: (sp.get("scope") as "own" | "competitor" | "hashtag") || "own",
       competitorId: sp.get("competitor_id") || undefined,
       hashtag: sp.get("tag") || undefined,
+      search: sp.get("search") || undefined,
       mode: sp.get("mode") === "best" ? "best" : "all",
       period: (sp.get("period") as PeriodId) || undefined,
       metric: (sp.get("metric") as RankMetric) || undefined,

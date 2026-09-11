@@ -10,10 +10,12 @@ const TABS = [
   { href: "/biblioteca", label: "Biblioteca" },
   { href: "/concorrencia", label: "Concorrência" },
   { href: "/integracoes", label: "Integrações" },
+  { href: "/estudio-reels", label: "Estúdio Reels" },
 ];
 
 export default function TopNav() {
   const pathname = usePathname();
+  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   return (
     <header className="glass-strong sticky top-4 z-20 flex flex-wrap items-center justify-between gap-4 rounded-2xl px-5 py-4 shadow-glass">
@@ -26,24 +28,30 @@ export default function TopNav() {
         </div>
       </div>
 
-      <nav className="flex flex-wrap items-center gap-1 rounded-full bg-white/60 p-1">
-        {TABS.map((tab) => {
-          const active = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
-          return (
+      <div className="flex flex-wrap items-center gap-2">
+        <nav className="flex flex-wrap items-center gap-1 rounded-full bg-white/60 p-1">
+          {TABS.map((tab) => (
             <Link
               key={tab.href}
               href={tab.href}
               className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                active
-                  ? "btn-gold"
-                  : "text-ink-500 hover:bg-white hover:text-ink-800"
+                isActive(tab.href) ? "btn-gold" : "text-ink-500 hover:bg-white hover:text-ink-800"
               }`}
             >
               {tab.label}
             </Link>
-          );
-        })}
-      </nav>
+          ))}
+        </nav>
+        {/* botão em destaque, sempre à direita */}
+        <Link
+          href="/criar-roteiro"
+          className={`rounded-full px-5 py-2 text-sm font-semibold shadow-goldGlow transition ${
+            isActive("/criar-roteiro") ? "bg-gold-500 text-ink-900" : "bg-ink-900 text-gold-200 hover:bg-ink-800"
+          }`}
+        >
+          ✦ Criar roteiro
+        </Link>
+      </div>
     </header>
   );
 }

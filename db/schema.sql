@@ -202,6 +202,12 @@ alter table scripts drop constraint if exists scripts_source_check;
 alter table scripts add constraint scripts_source_check
   check (source in ('manual', 'claude_code', 'gemini'));
 
+-- v4: roteiros gerados guardam os vídeos de referência (para thumb e pontuação),
+-- as cenas do Estúdio Reels e as opções usadas na geração.
+alter table scripts add column if not exists source_video_ids   uuid[];
+alter table scripts add column if not exists scenes             text;
+alter table scripts add column if not exists generation_options jsonb;
+
 -- Vídeos desligados da seleção de uma categoria (não entram no copiar/baixar/gerar).
 create table if not exists category_selection (
   category    text not null,

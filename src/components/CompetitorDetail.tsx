@@ -16,7 +16,7 @@ export default function CompetitorDetail({ id }: { id: string }) {
   const [own, setOwn] = useState<OwnStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [limit, setLimit] = useState(50);
+  const [limit, setLimit] = useState(200);
   const [reloadToken, setReloadToken] = useState(0);
   const [syncNote, setSyncNote] = useState<string | null>(null);
 
@@ -118,7 +118,10 @@ export default function CompetitorDetail({ id }: { id: string }) {
       <VideoBrowser
         scopeQuery={`scope=competitor&competitor_id=${id}`}
         reloadToken={reloadToken}
-        emptyDescription="Clique em Atualizar vídeos para buscar os posts deste concorrente."
+        hideBest
+        selectable
+        categoryFilter
+        emptyDescription="Clique em Buscar vídeos para trazer os posts deste concorrente."
         metricsNote={`De concorrentes a Meta informa views, curtidas e comentários. Salvamentos, compartilhamentos e alcance só existem na conta do Augusto.${syncNote ? ` · ${syncNote}` : ""}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -127,14 +130,14 @@ export default function CompetitorDetail({ id }: { id: string }) {
             </button>
             <div className="flex items-center overflow-hidden rounded-xl">
               <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="h-full border border-r-0 border-gold-300 bg-white/80 px-2 py-2 text-sm text-ink-700 outline-none">
-                {[50, 100, 200, 300].map((n) => (
+                {[100, 200, 300, 500].map((n) => (
                   <option key={n} value={n}>
-                    {n} posts
+                    {n === 500 ? "o máximo (500)" : `${n} posts`}
                   </option>
                 ))}
               </select>
               <button onClick={sync} disabled={syncing} className="btn-gold px-4 py-2 text-sm font-semibold disabled:opacity-60">
-                {syncing ? "Atualizando..." : "Atualizar vídeos"}
+                {syncing ? "Buscando..." : "Buscar vídeos"}
               </button>
             </div>
           </div>

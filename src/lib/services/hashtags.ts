@@ -37,7 +37,7 @@ export async function listHashtagSearches() {
   );
 }
 
-export async function searchHashtag(input: string, edge: "top_media" | "recent_media" = "top_media") {
+export async function searchHashtag(input: string, edge: "top_media" | "recent_media" = "top_media", limit = 50) {
   const hashtag = normalizeHashtag(input);
   const quota = await getHashtagQuota();
   const alreadyThisWeek = quota.hashtags_this_week.includes(hashtag);
@@ -53,7 +53,8 @@ export async function searchHashtag(input: string, edge: "top_media" | "recent_m
     [hashtag]
   );
   const hashtagId = known?.ig_hashtag_id ?? (await fetchHashtagId(hashtag));
-  const media = await fetchHashtagMedia(hashtagId, edge, 25);
+  // a Meta recusa páginas grandes nesse endpoint: vem de 5 em 5 até chegar ao limite
+  const media = await fetchHashtagMedia(hashtagId, edge, limit);
   await upsertExternalMedia(media, { source: "hashtag", hashtag });
   await query(
     `insert into hashtag_searches (hashtag, ig_hashtag_id, edge, result_count) values ($1, $2, $3, $4)`,

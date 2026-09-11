@@ -7,7 +7,7 @@ import AnalysisModal from "@/components/AnalysisModal";
 import type { ScriptRow, VideoRow } from "@/lib/types";
 
 type CategoryVideo = { video: VideoRow; enabled: boolean };
-type Category = { key: string; name: string; videos: CategoryVideo[]; enabled_count: number };
+type Category = { key: string; name: string; origin: "own" | "competitor" | "hashtag"; videos: CategoryVideo[]; enabled_count: number };
 
 /**
  * Curadoria por categoria (categorias geradas pelo Gemini). Cada vídeo tem um
@@ -79,7 +79,18 @@ export default function CategoriesBoard({ onScriptCreated }: { onScriptCreated: 
           description="As categorias aparecem quando os vídeos são analisados com o Gemini (o prompt pede as categorias de cada vídeo)."
         />
       ) : (
-        categories.map((cat) => (
+        [
+          { title: "Suas categorias", note: "Vídeos do @augustotita", list: categories.filter((c) => c.origin === "own") },
+          { title: "Categorias dos concorrentes", note: "Cada categoria leva o nome da conta: @concorrente+Categoria", list: categories.filter((c) => c.origin !== "own") },
+        ]
+          .filter((section) => section.list.length)
+          .map((section) => (
+          <section key={section.title} className="space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold text-ink-900">{section.title}</h2>
+              <p className="text-xs text-ink-400">{section.note}</p>
+            </div>
+        {section.list.map((cat) => (
           <GlassCard key={cat.key} strong className="p-5 sm:p-6">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -102,7 +113,9 @@ export default function CategoriesBoard({ onScriptCreated }: { onScriptCreated: 
               ))}
             </div>
           </GlassCard>
-        ))
+        ))}
+          </section>
+          ))
       )}
 
       {openVideo && (
@@ -202,6 +215,7 @@ function GenerateDialog({ category, onClose, onCreated }: { category: Category; 
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [script, setScript] = useState<ScriptRow | null>(null);
+  const [scenes, setScenes] = useState(true);
 
   useEffect(() => {
     fetch(`/api/categories?instructions=${encodeURIComponent(category.name)}`)
@@ -217,7 +231,7 @@ function GenerateDialog({ category, onClose, onCreated }: { category: Category; 
       const res = await fetch("/api/categories/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ category: category.name, instructions }),
+        body: JSON.stringify({ category: category.name, instructions, scenes }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao gerar roteiro.");
@@ -255,6 +269,7 @@ function GenerateDialog({ category, onClose, onCreated }: { category: Category; 
               <Block title="Gancho" text={script.hook} />
               <Block title="Estrutura" text={script.structure} />
               <Block title="Roteiro completo" text={script.full_script} />
+              {script.scenes && <Block title="Cenas do Estúdio Reels" text={script.scenes} />}
               <div className="flex justify-end">
                 <button onClick={onCreated} className="btn-gold rounded-lg px-4 py-2 text-sm font-semibold">
                   Ver em Roteiros
@@ -273,7 +288,11 @@ function GenerateDialog({ category, onClose, onCreated }: { category: Category; 
                 className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 font-mono text-xs leading-relaxed text-ink-700 outline-none focus:border-gold-400"
               />
               {error && <p className="text-xs text-rose-600">{error}</p>}
-              <div className="flex justify-end">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm text-ink-700">
+                  <input type="checkbox" checked={scenes} onChange={(e) => setScenes(e.target.checked)} className="accent-gold-600" />
+                  Gerar cenas do Estúdio Reels
+                </label>
                 <button onClick={send} disabled={sending || loading} className="btn-gold rounded-lg px-4 py-2 text-sm font-semibold">
                   {sending ? "Gemini escrevendo o roteiro..." : "Enviar ao Gemini"}
                 </button>

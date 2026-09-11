@@ -1,4 +1,5 @@
 import { query, queryOne } from "@/lib/db";
+import { buildScoreContext, scoreFromVideos } from "@/lib/services/scriptScore";
 import type { ScriptRow } from "@/lib/types";
 
 const LIST_QUERY = `
@@ -12,8 +13,22 @@ const LIST_QUERY = `
   order by s.created_at desc
 `;
 
+/**
+ * Roteiros com pontuação e miniaturas: ligado a um vídeo publicado → nota do
+ * resultado real; gerado → nota média dos vídeos de referência.
+ */
 export async function listScripts(): Promise<ScriptRow[]> {
-  return query<ScriptRow>(LIST_QUERY);
+  const [rows, ctx] = await Promise.all([query<ScriptRow>(LIST_QUERY), buildScoreContext()]);
+  return rows.map((s) => {
+    const ids = s.video_id ? [s.video_id] : s.source_video_ids ?? [];
+    const score = s.video_id ? scoreFromVideos([s.video_id], ctx, "resultado") : scoreFromVideos(ids, ctx, "referencias");
+    const thumbs = ids
+      .map((id) => ctx.get(id))
+      .filter((v): v is NonNullable<typeof v> => Boolean(v))
+      .slice(0, 4)
+      .map((v) => ({ thumbnail_url: v.thumbnail_url, caption: v.caption, permalink: v.permalink }));
+    return { ...s, score, thumbs };
+  });
 }
 
 export async function getScript(id: string): Promise<ScriptRow | null> {
@@ -30,13 +45,17 @@ export interface UpsertScriptInput {
   source?: "manual" | "claude_code" | "gemini";
   category?: string | null;
   generation_prompt?: string | null;
+  source_video_ids?: string[] | null;
+  scenes?: string | null;
+  generation_options?: unknown;
   created_by?: string;
 }
 
 export async function createScript(input: UpsertScriptInput): Promise<ScriptRow> {
   const row = await queryOne<ScriptRow>(
-    `insert into scripts (video_id, title, full_script, hook, structure, status, source, created_by, category, generation_prompt)
-     values ($1,$2,$3,$4,$5,coalesce($6,'draft'),coalesce($7,'manual'),$8,$9,$10)
+    `insert into scripts (video_id, title, full_script, hook, structure, status, source, created_by, category,
+                          generation_prompt, source_video_ids, scenes, generation_options)
+     values ($1,$2,$3,$4,$5,coalesce($6,'draft'),coalesce($7,'manual'),$8,$9,$10,$11,$12,$13)
      returning *`,
     [
       input.video_id ?? null,
@@ -49,6 +68,9 @@ export async function createScript(input: UpsertScriptInput): Promise<ScriptRow>
       input.created_by ?? null,
       input.category ?? null,
       input.generation_prompt ?? null,
+      input.source_video_ids?.length ? input.source_video_ids : null,
+      input.scenes ?? null,
+      input.generation_options ? JSON.stringify(input.generation_options) : null,
     ]
   );
   if (!row) throw new Error("Falha ao criar roteiro.");
@@ -71,7 +93,7 @@ export async function updateScript(
 
   return queryOne<ScriptRow>(
     `update scripts set
-       title = $2, full_script = $3, hook = $4, structure = $5, status = $6, video_id = $7
+       title = $2, full_script = $3, hook = $4, structure = $5, status = $6, video_id = $7, scenes = $8
      where id = $1
      returning *`,
     [
@@ -82,6 +104,7 @@ export async function updateScript(
       input.structure ?? existing.structure,
       input.status ?? existing.status,
       input.video_id !== undefined ? input.video_id : existing.video_id,
+      input.scenes !== undefined ? input.scenes : existing.scenes ?? null,
     ]
   );
 }

@@ -2,19 +2,21 @@
 
 import { useEffect, useState } from "react";
 import ScriptsBoard from "@/components/ScriptsBoard";
+import VideoScripts from "@/components/VideoScripts";
 import CategoriesBoard from "@/components/CategoriesBoard";
 import DeleteScripts from "@/components/DeleteScripts";
 
-type Tab = "roteiros" | "categorias" | "excluir";
+type Tab = "videos" | "gerados" | "categorias" | "excluir";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "roteiros", label: "Roteiros" },
+  { id: "videos", label: "Roteiros dos vídeos" },
+  { id: "gerados", label: "Roteiros gerados" },
   { id: "categorias", label: "Categorias" },
   { id: "excluir", label: "Excluir roteiros" },
 ];
 
 export default function RoteirosPage() {
-  const [tab, setTab] = useState<Tab>("roteiros");
+  const [tab, setTab] = useState<Tab>("videos");
 
   // permite abrir direto numa aba: /roteiros#categorias (inclusive trocando só o # na barra de endereço)
   useEffect(() => {
@@ -47,8 +49,9 @@ export default function RoteirosPage() {
           </button>
         ))}
       </div>
-      {tab === "roteiros" && <ScriptsBoard />}
-      {tab === "categorias" && <CategoriesBoard onScriptCreated={() => select("roteiros")} />}
+      {tab === "videos" && <VideoScripts />}
+      {tab === "gerados" && <ScriptsBoard />}
+      {tab === "categorias" && <CategoriesBoard onScriptCreated={() => select("gerados")} />}
       {tab === "excluir" && <DeleteScripts />}
     </div>
   );

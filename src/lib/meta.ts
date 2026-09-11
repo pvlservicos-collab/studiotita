@@ -273,29 +273,40 @@ const HASHTAG_MEDIA_FIELDS =
  * Posts de uma hashtag ("top_media" = em alta, "recent_media" = últimas 24h).
  * A Meta recusa páginas grandes nesse endpoint, então vamos de 5 em 5.
  */
-export async function fetchHashtagMedia(hashtagId: string, edge: "top_media" | "recent_media", max = 25) {
+export async function fetchHashtagMedia(hashtagId: string, edge: "top_media" | "recent_media", max = 50) {
   const { igUserId } = requireConfig();
   const items: DiscoveryMedia[] = [];
-  let next: string | undefined;
-  let limit = 5;
+  let after: string | undefined;
+  // a Meta recusa páginas grandes aqui: "em alta" aceita 5 por vez, "recentes" até 15
+  let page = edge === "recent_media" ? 15 : 5;
+  let retries = 0;
+
   while (items.length < max) {
+    const params: Record<string, string> = {
+      user_id: igUserId,
+      fields: HASHTAG_MEDIA_FIELDS,
+      limit: String(Math.max(1, Math.min(page, max - items.length))),
+    };
+    if (after) params.after = after;
+
     let data;
     try {
-      data = next
-        ? await graphGet(next, {})
-        : await graphGet(`${hashtagId}/${edge}`, { user_id: igUserId, fields: HASHTAG_MEDIA_FIELDS, limit: String(limit) });
+      data = await graphGet(`${hashtagId}/${edge}`, params);
     } catch (err) {
-      // "reduce the amount of data": tenta uma página menor uma vez, depois para com o que já veio
-      if (/reduce the amount of data/i.test((err as Error).message) && limit > 2 && !next) {
-        limit = 2;
+      // página ainda grande (ou instabilidade): tenta menor, depois para com o que já veio
+      if (/reduce the amount of data/i.test((err as Error).message) && page > 3 && retries < 3) {
+        page = 3;
+        retries++;
         continue;
       }
       if (items.length) break;
       throw err;
     }
-    items.push(...((data.data ?? []) as DiscoveryMedia[]));
-    next = data.paging?.next;
-    if (!next) break;
+
+    const batch = (data.data ?? []) as DiscoveryMedia[];
+    items.push(...batch);
+    after = data.paging?.cursors?.after;
+    if (!batch.length || !after || !data.paging?.next) break;
   }
   return items.slice(0, max);
 }

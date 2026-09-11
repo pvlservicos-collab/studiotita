@@ -105,6 +105,22 @@ export interface ScriptRow {
   source: "manual" | "claude_code" | "gemini";
   category?: string | null;
   generation_prompt?: string | null;
+  /** vídeos de referência usados na geração (thumb e pontuação) */
+  source_video_ids?: string[] | null;
+  /** ideias de cena do Estúdio Reels geradas junto com o roteiro */
+  scenes?: string | null;
+  generation_options?: unknown;
+  /** nota interna 0-100: resultado do vídeo publicado ou média das referências */
+  score?: {
+    score: number;
+    basis: "resultado" | "referencias";
+    videos: number;
+    avg_views: number | null;
+    avg_comments: number | null;
+    avg_likes: number | null;
+    avg_saves: number | null;
+  } | null;
+  thumbs?: { thumbnail_url: string | null; caption: string | null; permalink: string | null }[];
   created_by: string | null;
   created_at: string;
   updated_at: string;

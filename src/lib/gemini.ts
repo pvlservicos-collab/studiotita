@@ -141,10 +141,20 @@ Assista ao vídeo inteiro e responda em português do Brasil, preenchendo cinco 
    corrigir a fala. Marque o tempo no formato [mm:ss] no início de cada frase ou troca de ideia. Textos que
    aparecem escritos na tela entram entre colchetes, ex.: [texto na tela: "..."].
 
-3. "estrutura": a estrutura narrativa que o vídeo segue, parte por parte, com o intervalo de segundos de cada
-   parte. Uma linha por parte, no formato "[0s–3s] Nome da parte: o que acontece e qual a função dela"
-   (ex.: gancho, CTA de salvar, blocos de conteúdo, virada, alerta ou solução, CTA de compartilhar,
-   apresentação, CTA final). Cubra o vídeo do início ao fim.
+3. "estrutura": a ENGENHARIA REVERSA da narrativa, com olhar de marketing digital. Não descreva o que aparece
+   na tela; explique por que cada parte existe e o que ela provoca em quem assiste. Divida o vídeo nas partes
+   da narrativa, do início ao fim, uma linha por parte, no formato:
+   "[0s–3s] FUNÇÃO · gatilho: ... · emoção: ... · como foi construído: ..."
+   - FUNÇÃO: o papel da parte (gancho, quebra de padrão, identificação com a dor, promessa, prova,
+     conteúdo/mecanismo, virada, alerta/consequência, solução, CTA de salvar, de compartilhar, de comentar...).
+   - gatilho: o gatilho mental usado (curiosidade, dor, medo de perder, identificação, contraste, autoridade,
+     prova social, especificidade, urgência, pertencimento, reciprocidade, novidade...).
+   - emoção: a emoção que a parte quer transmitir ou provocar (indignação, alívio, culpa, esperança, surpresa...).
+   - como foi construído: a técnica (pergunta, número forte, lista, história, analogia, pausa, tom de voz...).
+   Depois das partes, feche com duas linhas:
+   "Arco da narrativa: ..." (o desenho do vídeo numa frase, ex.: começa emocional com uma dor, no meio
+   explica os 3 itens, no fim fecha com CTA de comentário) e
+   "Aprendizados para replicar: ..." (2 a 4 lições práticas para usar em outros roteiros).
 
 4. "gancho": o gancho do vídeo, ou seja, os primeiros segundos que prendem a atenção. Traga a fala exata
    (verbal), o texto na tela (textual), o que aparece na imagem (visual), quantos segundos dura e qual

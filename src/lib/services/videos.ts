@@ -25,6 +25,8 @@ export interface VideoFilter {
   scope?: "own" | "competitor" | "hashtag" | "all";
   competitorId?: string;
   hashtag?: string;
+  /** procura na legenda, na transcrição e nas categorias que o Gemini gerou */
+  search?: string;
 }
 
 export async function listVideos(filter: VideoFilter = {}): Promise<VideoRow[]> {
@@ -45,6 +47,15 @@ export async function listVideos(filter: VideoFilter = {}): Promise<VideoRow[]> 
       params.push(filter.hashtag);
       where.push(`v.hashtag = $${params.length}`);
     }
+  }
+  if (filter.search?.trim()) {
+    params.push(`%${filter.search.trim()}%`);
+    where.push(
+      `(v.caption ilike $${params.length} or exists (
+         select 1 from analyses a where a.video_id = v.id and a.status = 'done'
+         and (a.transcript ilike $${params.length} or a.summary ilike $${params.length}
+              or array_to_string(a.categories, ' ') ilike $${params.length})))`
+    );
   }
   return query<VideoRow>(
     `${SELECT_VIDEOS} ${where.length ? `where ${where.join(" and ")}` : ""}

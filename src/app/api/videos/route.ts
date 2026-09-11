@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
       scope: (sp.get("scope") as "own" | "competitor" | "hashtag" | "all") || "own",
       competitorId: sp.get("competitor_id") || undefined,
       hashtag: sp.get("tag") || undefined,
+      search: sp.get("search") || undefined,
     });
     return NextResponse.json({ videos });
   } catch (err) {

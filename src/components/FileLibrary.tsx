@@ -223,6 +223,12 @@ export default function FileLibrary() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {files.map((f) => (
             <GlassCard key={f.id} strong className="flex flex-col gap-2 p-4">
+              {f.content_type?.startsWith("image/") && f.blob_url && (
+                <button onClick={() => setOpenId(f.id)} className="-mx-4 -mt-4 mb-1 block h-36 overflow-hidden rounded-t-2xl bg-ink-900">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={f.blob_url} alt={f.name} loading="lazy" className="h-full w-full object-contain" />
+                </button>
+              )}
               <div className="flex items-start justify-between gap-2">
                 <button onClick={() => setOpenId(f.id)} className="min-w-0 text-left">
                   <div className="truncate text-sm font-semibold text-ink-900 hover:text-gold-700">{f.name}</div>
@@ -232,7 +238,9 @@ export default function FileLibrary() {
                 </button>
                 <Badge tone="gold">{categoryLabel(f.category)}</Badge>
               </div>
-              {f.description && <p className="line-clamp-2 text-xs text-ink-600">{f.description}</p>}
+              <p className={`line-clamp-3 text-xs leading-relaxed ${f.description ? "text-ink-600" : "italic text-ink-400"}`}>
+                {f.description || "Sem descrição (gerada automaticamente pelo Gemini depois do envio)."}
+              </p>
               <div className="mt-auto flex items-center justify-between pt-1 text-xs">
                 <span className={f.text_length ? "text-ink-500" : "text-amber-600"}>
                   {f.text_length
