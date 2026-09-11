@@ -12,6 +12,7 @@
  */
 import { createMcpHandler } from "mcp-handler";
 import { registerTools } from "@/mcp/tools";
+import { MCP_INSTRUCTIONS } from "@/mcp/guide";
 import { actorStorage } from "@/mcp/actor";
 
 export const runtime = "nodejs";
@@ -24,7 +25,8 @@ const mcpHandler = createMcpHandler(
   (server) => {
     registerTools(server);
   },
-  { serverInfo: { name: "videoteca-ig", version: "0.1.0" } },
+  // instructions chega ao Claude na conexão: ele já sabe o que o app faz e quais tools existem.
+  { serverInfo: { name: "videoteca-augusto", version: "0.2.0" }, instructions: MCP_INSTRUCTIONS },
   { basePath: "/api", maxDuration, disableSse: true }
 );
 
@@ -44,11 +46,13 @@ function checkAuth(req: Request): boolean {
   if (!expected) return true; // sem chave configurada ainda = endpoint aberto (modo setup)
   const header = req.headers.get("authorization") || "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
-  return token === expected;
+  // ?key= na URL: conectores do app Claude (desktop/claude.ai) não mandam cabeçalho próprio.
+  const queryKey = new URL(req.url).searchParams.get("key");
+  return token === expected || queryKey === expected;
 }
 
 async function withActor(req: Request, run: () => Promise<Response>) {
-  const actor = req.headers.get("x-client-name") || "cliente";
+  const actor = req.headers.get("x-client-name") || new URL(req.url).searchParams.get("client") || "cliente";
   return actorStorage.run(actor, run);
 }
 

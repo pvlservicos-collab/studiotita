@@ -119,32 +119,52 @@ async function waitUntilActive(fileName: string, apiKey: string, timeoutMs = 60_
 
 export interface GeminiAnalysisResult {
   summary: string;
-  patterns: string;
+  transcript: string;
+  prompt: string;
+  model: string;
   raw: unknown;
 }
 
-const ANALYSIS_PROMPT = `Você é um analista de conteúdo especializado em vídeos curtos para Instagram (Reels).
-Assista ao vídeo enviado e responda em português, em duas seções claramente separadas por "###PADROES###":
+/**
+ * Prompt padrão. Quem pede a análise (painel ou Claude do Augusto) pode
+ * mandar outro; o usado fica gravado em analyses.prompt.
+ */
+export const DEFAULT_ANALYSIS_PROMPT = `Você é um analista de conteúdo especializado em vídeos curtos do Instagram (Reels).
+Assista ao vídeo inteiro e responda em português do Brasil, preenchendo dois campos:
 
-1. Antes de "###PADROES###": um RESUMO objetivo do vídeo — do que ele trata, tom, ritmo, edição, CTA usado.
-2. Depois de "###PADROES###": os PADRÕES E ROTEIRO identificados — qual é o gancho (primeiros 3 segundos), a estrutura
-   narrativa (abertura / desenvolvimento / fechamento), técnicas de retenção usadas, e sugestões concretas do que
-   manter ou melhorar em próximos vídeos com base neste padrão.
+1. "resumo": um resumo objetivo do vídeo — do que ele trata, a mensagem principal, o tom, o ritmo e a edição,
+   o gancho dos 3 primeiros segundos, a estrutura (abertura, desenvolvimento, fechamento) e o CTA usado.
 
-Seja específico e acionável, evite generalidades.`;
+2. "transcricao": a transcrição completa e literal de tudo o que é falado, do início ao fim, sem resumir nem
+   corrigir a fala. Marque o tempo no formato [mm:ss] no início de cada frase ou troca de ideia. Textos que
+   aparecem escritos na tela entram entre colchetes, ex.: [texto na tela: "..."].`;
+
+// A resposta sempre volta nesses dois campos, mesmo com prompt personalizado.
+const RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    resumo: { type: "STRING" },
+    transcricao: { type: "STRING" },
+  },
+  required: ["resumo", "transcricao"],
+};
 
 /**
  * Faz o fluxo completo: upload do vídeo + geração de análise.
  * Lança GeminiConfigError se faltar configuração, GeminiRequestError se a
  * chamada à API falhar — a rota que chama isso decide como reportar.
  */
-export async function analyzeVideoWithGemini(videoUrl: string): Promise<GeminiAnalysisResult> {
+export async function analyzeVideoWithGemini(
+  videoUrl: string,
+  prompt: string = DEFAULT_ANALYSIS_PROMPT
+): Promise<GeminiAnalysisResult> {
   const apiKey = requireApiKey();
+  const model = modelName();
   const uploaded = await uploadVideoToGemini(videoUrl);
   await waitUntilActive(uploaded.name, apiKey);
 
   const res = await fetch(
-    `${GEMINI_API_BASE}/v1beta/models/${modelName()}:generateContent?key=${apiKey}`,
+    `${GEMINI_API_BASE}/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -154,10 +174,14 @@ export async function analyzeVideoWithGemini(videoUrl: string): Promise<GeminiAn
             role: "user",
             parts: [
               { file_data: { file_uri: uploaded.uri, mime_type: uploaded.mimeType } },
-              { text: ANALYSIS_PROMPT },
+              { text: prompt },
             ],
           },
         ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA,
+        },
       }),
     }
   );
@@ -171,13 +195,21 @@ export async function analyzeVideoWithGemini(videoUrl: string): Promise<GeminiAn
 
   const data = await res.json();
   const text: string =
-    data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("\n") ?? "";
+    data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
 
-  const [summaryPart, patternsPart] = text.split("###PADROES###");
+  let parsed: { resumo?: string; transcricao?: string } = {};
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // Resposta fora do formato: guarda o texto inteiro como resumo.
+    parsed = { resumo: text };
+  }
 
   return {
-    summary: (summaryPart || text).trim(),
-    patterns: (patternsPart || "").trim(),
+    summary: (parsed.resumo ?? "").trim(),
+    transcript: (parsed.transcricao ?? "").trim(),
+    prompt,
+    model,
     raw: data,
   };
 }

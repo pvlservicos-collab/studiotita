@@ -1,4 +1,7 @@
-import { Pool } from "pg";
+import { Pool, types } from "pg";
+
+// bigint (views, likes...) volta como string por padrão; métricas nunca passam de 2^53.
+types.setTypeParser(20, (value) => parseInt(value, 10));
 
 // Pool único reaproveitado entre requests (Next.js reusa o módulo em dev/serverless).
 declare global {

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { listVideos, createVideo, syncVideosFromMeta } from "@/lib/services/videos";
 import { apiErrorResponse } from "@/lib/apiError";
 
+// Sincronizar 100+ posts com as métricas de cada um leva mais que o padrão.
+export const maxDuration = 300;
+
 export async function GET() {
   try {
     const videos = await listVideos();

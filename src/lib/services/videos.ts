@@ -4,11 +4,12 @@ import { fetchRecentMedia, fetchMediaInsights } from "@/lib/meta";
 
 const LIST_QUERY = `
   select v.*,
+         la.id      as latest_analysis_id,
          la.status  as latest_analysis_status,
          la.summary as latest_analysis_summary
   from videos v
   left join lateral (
-    select status, summary
+    select id, status, summary
     from analyses a
     where a.video_id = v.id
     order by a.requested_at desc
@@ -24,11 +25,12 @@ export async function listVideos(): Promise<VideoRow[]> {
 export async function getVideo(id: string): Promise<VideoRow | null> {
   return queryOne<VideoRow>(
     `select v.*,
+            la.id      as latest_analysis_id,
             la.status  as latest_analysis_status,
             la.summary as latest_analysis_summary
      from videos v
      left join lateral (
-       select status, summary
+       select id, status, summary
        from analyses a
        where a.video_id = v.id
        order by a.requested_at desc
@@ -68,24 +70,32 @@ export async function createVideo(input: CreateVideoInput): Promise<VideoRow> {
 
 /**
  * Busca os vídeos recentes na Meta Graph API e faz upsert em `videos`,
- * incluindo os insights por mídia (views/likes/comments/shares/saves).
+ * incluindo todas as métricas da mídia (colunas principais + `metrics`).
  */
 export async function syncVideosFromMeta(limit = 25) {
-  const media = await fetchRecentMedia(limit);
+  const media = (await fetchRecentMedia(limit)).filter(
+    (item) => item.media_type === "VIDEO" || item.media_type === "REELS"
+  );
   let created = 0;
   let updated = 0;
 
+  // Métricas em lotes paralelos: com 100+ vídeos, uma a uma estoura o tempo da função.
+  const insightsById: Record<string, Record<string, number>> = {};
+  for (let i = 0; i < media.length; i += 8) {
+    await Promise.all(
+      media.slice(i, i + 8).map(async (item) => {
+        try {
+          insightsById[item.id] = await fetchMediaInsights(item.id, item.media_product_type);
+        } catch (err) {
+          // Alguns tipos de mídia não têm todas as métricas — segue sem travar o sync.
+          console.warn(`Insights indisponíveis para a mídia ${item.id}:`, (err as Error).message);
+        }
+      })
+    );
+  }
+
   for (const item of media) {
-    if (item.media_type !== "VIDEO" && item.media_type !== "REELS") continue;
-
-    let insights: Record<string, number> = {};
-    try {
-      insights = await fetchMediaInsights(item.id, item.media_product_type);
-    } catch (err) {
-      // Alguns tipos de mídia não têm todas as métricas — segue sem travar o sync.
-      console.warn(`Insights indisponíveis para a mídia ${item.id}:`, (err as Error).message);
-    }
-
+    const insights = insightsById[item.id] ?? {};
     const mediaType = item.media_product_type === "REELS" ? "REELS" : item.media_type;
     const metrics = [
       insights.views ?? 0,
@@ -106,7 +116,8 @@ export async function syncVideosFromMeta(limit = 25) {
         `update videos set
            caption = $2, thumbnail_url = $3, video_url = $4, permalink = $5,
            posted_at = $6, views = $7, likes = $8, comments = $9, shares = $10,
-           saves = $11, reach = $12, raw_meta = $13, media_type = $14
+           saves = $11, reach = $12, raw_meta = $13, media_type = $14,
+           metrics = $15, metrics_updated_at = now()
          where id = $1`,
         [
           existing.id,
@@ -118,6 +129,7 @@ export async function syncVideosFromMeta(limit = 25) {
           ...metrics,
           JSON.stringify({ media: item, insights }),
           mediaType,
+          JSON.stringify(insights),
         ]
       );
       updated++;
@@ -125,8 +137,9 @@ export async function syncVideosFromMeta(limit = 25) {
       await query(
         `insert into videos
            (ig_media_id, source, caption, media_type, thumbnail_url, video_url,
-            permalink, posted_at, views, likes, comments, shares, saves, reach, raw_meta)
-         values ($1,'meta',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+            permalink, posted_at, views, likes, comments, shares, saves, reach, raw_meta,
+            metrics, metrics_updated_at)
+         values ($1,'meta',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now())`,
         [
           item.id,
           item.caption ?? null,
@@ -137,6 +150,7 @@ export async function syncVideosFromMeta(limit = 25) {
           item.timestamp ?? null,
           ...metrics,
           JSON.stringify({ media: item, insights }),
+          JSON.stringify(insights),
         ]
       );
       created++;

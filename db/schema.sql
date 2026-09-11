@@ -32,6 +32,11 @@ create table if not exists videos (
 
 create index if not exists idx_videos_posted_at on videos (posted_at desc);
 
+-- Todas as métricas que a Meta devolve para a mídia (views, alcance, tempo
+-- médio assistido, taxa de pulo...), atualizadas a cada sincronização.
+alter table videos add column if not exists metrics            jsonb;
+alter table videos add column if not exists metrics_updated_at timestamptz;
+
 -- ============================================================
 -- SCRIPTS (roteiros): roteiro completo + gancho (3s iniciais) +
 -- estrutura. Pode estar ligado a um vídeo publicado ou ser um
@@ -74,6 +79,39 @@ create table if not exists analyses (
 );
 
 create index if not exists idx_analyses_video_id on analyses (video_id, requested_at desc);
+
+-- Campos da análise v2: o prompt e o modelo usados ficam gravados em cada
+-- análise (o Claude do Augusto pode mandar prompts diferentes), além da
+-- transcrição e da adequação às regras do Augusto (preenchida depois, à mão
+-- ou pelo Claude).
+alter table analyses add column if not exists prompt       text;
+alter table analyses add column if not exists model        text;
+alter table analyses add column if not exists transcript   text;
+alter table analyses add column if not exists rules_fit    text;
+alter table analyses add column if not exists updated_at   timestamptz not null default now();
+
+-- ============================================================
+-- FILES: biblioteca de arquivos (roteiros antigos, transcrições de
+-- aula etc.). O arquivo original fica no Vercel Blob e o texto
+-- extraído fica em text_content, para o Claude ler e pesquisar.
+-- ============================================================
+create table if not exists files (
+  id                uuid primary key default gen_random_uuid(),
+  name              text not null,
+  category          text not null default 'outro',   -- 'roteiro_antigo' | 'transcricao_aula' | 'outro' (livre)
+  description       text,
+  blob_url          text,
+  content_type      text,
+  size_bytes        bigint,
+  text_content      text,                            -- texto extraído (txt, md, docx, pdf) ou enviado pelo Claude
+  source            text not null default 'upload',  -- 'upload' | 'claude_code'
+  created_by        text,
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create index if not exists idx_files_created_at on files (created_at desc);
+create index if not exists idx_files_category on files (category);
 
 -- ============================================================
 -- META_INSIGHTS: snapshots de métricas da conta do Instagram via
@@ -122,4 +160,12 @@ create trigger trg_videos_updated_at before update on videos
 
 drop trigger if exists trg_scripts_updated_at on scripts;
 create trigger trg_scripts_updated_at before update on scripts
+  for each row execute procedure set_updated_at();
+
+drop trigger if exists trg_analyses_updated_at on analyses;
+create trigger trg_analyses_updated_at before update on analyses
+  for each row execute procedure set_updated_at();
+
+drop trigger if exists trg_files_updated_at on files;
+create trigger trg_files_updated_at before update on files
   for each row execute procedure set_updated_at();

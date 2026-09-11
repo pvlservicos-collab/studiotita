@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { href: "/", label: "Vídeos" },
+  { href: "/metricas", label: "Métricas" },
   { href: "/roteiros", label: "Roteiros" },
+  { href: "/biblioteca", label: "Biblioteca" },
   { href: "/integracoes", label: "Integrações" },
 ];
 
@@ -24,7 +26,7 @@ export default function TopNav() {
         </div>
       </div>
 
-      <nav className="flex items-center gap-1 rounded-full bg-white/60 p-1">
+      <nav className="flex flex-wrap items-center gap-1 rounded-full bg-white/60 p-1">
         {TABS.map((tab) => {
           const active = pathname === tab.href;
           return (

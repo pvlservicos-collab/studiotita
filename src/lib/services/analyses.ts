@@ -1,7 +1,12 @@
 import { waitUntil } from "@vercel/functions";
 import { query, queryOne } from "@/lib/db";
 import type { AnalysisRow, VideoRow } from "@/lib/types";
-import { analyzeVideoWithGemini, GeminiConfigError, GeminiRequestError } from "@/lib/gemini";
+import {
+  analyzeVideoWithGemini,
+  DEFAULT_ANALYSIS_PROMPT,
+  GeminiConfigError,
+  GeminiRequestError,
+} from "@/lib/gemini";
 import { fetchMediaUrl } from "@/lib/meta";
 import { getVideo } from "@/lib/services/videos";
 
@@ -19,6 +24,37 @@ export async function listAnalysesForVideo(videoId: string): Promise<AnalysisRow
   );
 }
 
+export async function getAnalysis(id: string): Promise<AnalysisRow | null> {
+  return queryOne<AnalysisRow>(`select * from analyses where id = $1`, [id]);
+}
+
+export interface UpdateAnalysisInput {
+  summary?: string | null;
+  transcript?: string | null;
+  rules_fit?: string | null;
+}
+
+/** Edita os campos de texto de uma análise (painel ou Claude do Augusto). */
+export async function updateAnalysis(id: string, input: UpdateAnalysisInput): Promise<AnalysisRow | null> {
+  return queryOne<AnalysisRow>(
+    `update analyses set
+       summary    = case when $2 then $3 else summary end,
+       transcript = case when $4 then $5 else transcript end,
+       rules_fit  = case when $6 then $7 else rules_fit end
+     where id = $1
+     returning *`,
+    [
+      id,
+      input.summary !== undefined,
+      input.summary ?? null,
+      input.transcript !== undefined,
+      input.transcript ?? null,
+      input.rules_fit !== undefined,
+      input.rules_fit ?? null,
+    ]
+  );
+}
+
 export class AnalysisInputError extends Error {}
 
 /**
@@ -31,8 +67,11 @@ export class AnalysisInputError extends Error {}
  */
 export async function requestAnalysis(
   videoId: string,
-  requestedBy: string
+  requestedBy: string,
+  customPrompt?: string | null
 ): Promise<AnalysisRow> {
+  const prompt = customPrompt?.trim() || DEFAULT_ANALYSIS_PROMPT;
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-pro";
   const video = await getVideo(videoId);
   if (!video) {
     throw new AnalysisInputError(`Vídeo ${videoId} não encontrado.`);
@@ -44,15 +83,15 @@ export async function requestAnalysis(
   }
 
   const analysis = await queryOne<AnalysisRow>(
-    `insert into analyses (video_id, status, requested_by)
-     values ($1, 'pending', $2)
+    `insert into analyses (video_id, status, requested_by, prompt, model)
+     values ($1, 'pending', $2, $3, $4)
      returning *`,
-    [videoId, requestedBy]
+    [videoId, requestedBy, prompt, model]
   );
   if (!analysis) throw new Error("Falha ao criar registro de análise.");
 
   waitUntil(
-    processAnalysis(analysis.id, video).catch((err) => {
+    processAnalysis(analysis.id, video, prompt).catch((err) => {
       console.error(`Erro ao processar análise ${analysis.id}:`, err);
     })
   );
@@ -74,16 +113,17 @@ async function resolveVideoUrl(video: VideoRow): Promise<string> {
   throw new AnalysisInputError(`A Meta não devolveu o link do vídeo ${video.id}.`);
 }
 
-async function processAnalysis(analysisId: string, video: VideoRow) {
+async function processAnalysis(analysisId: string, video: VideoRow, prompt: string) {
   await query(`update analyses set status = 'processing' where id = $1`, [analysisId]);
 
   try {
     const videoUrl = await resolveVideoUrl(video);
-    const result = await analyzeVideoWithGemini(videoUrl);
+    const result = await analyzeVideoWithGemini(videoUrl, prompt);
     await query(
-      `update analyses set status = 'done', summary = $2, patterns = $3, raw_response = $4, completed_at = now()
+      `update analyses set status = 'done', summary = $2, transcript = $3, model = $4,
+              raw_response = $5, completed_at = now()
        where id = $1`,
-      [analysisId, result.summary, result.patterns, JSON.stringify(result.raw)]
+      [analysisId, result.summary, result.transcript, result.model, JSON.stringify(result.raw)]
     );
   } catch (err) {
     const message =

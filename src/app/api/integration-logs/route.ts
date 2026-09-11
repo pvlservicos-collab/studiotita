@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { apiErrorResponse } from "@/lib/apiError";
 
+// Sem isso o Next consulta o banco no build e a lista fica congelada.
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const logs = await query(

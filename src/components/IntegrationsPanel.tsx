@@ -1,26 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { GlassCard, Badge, EmptyState } from "@/components/ui";
-import type { MetaInsightRow } from "@/lib/types";
+import { GlassCard, Badge } from "@/components/ui";
+import { MCP_TOOL_GROUPS } from "@/mcp/guide";
 
-type SubTab = "meta" | "status" | "mcp";
-
-const METRIC_LABELS: Record<string, string> = {
-  reach: "Alcance (dia)",
-  views: "Visualizações (dia)",
-  accounts_engaged: "Contas engajadas (dia)",
-  total_interactions: "Interações (dia)",
-  profile_views: "Visitas ao perfil (dia)",
-  follower_count: "Novos seguidores (dia)",
-  followers_count: "Seguidores (total)",
-  follows_count: "Seguindo",
-  media_count: "Publicações",
-  website_clicks: "Cliques no site (dia)",
-};
+type SubTab = "status" | "mcp";
 
 export default function IntegrationsPanel() {
-  const [tab, setTab] = useState<SubTab>("meta");
+  const [tab, setTab] = useState<SubTab>("mcp");
 
   return (
     <div className="space-y-6">
@@ -29,15 +16,14 @@ export default function IntegrationsPanel() {
           <span className="gold-gradient-text">Integrações</span>
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          Dados da Meta, status das conexões e como o Claude Code do seu cliente se conecta a este sistema.
+          Como o Claude do Augusto se conecta a este sistema e o status de cada conexão.
         </p>
       </div>
 
       <div className="flex w-fit gap-1 rounded-full bg-white/60 p-1">
         {[
-          { id: "meta" as const, label: "Meta / Instagram" },
+          { id: "mcp" as const, label: "Claude (MCP)" },
           { id: "status" as const, label: "Status do sistema" },
-          { id: "mcp" as const, label: "Claude Code (MCP)" },
         ].map((t) => (
           <button
             key={t.id}
@@ -51,84 +37,8 @@ export default function IntegrationsPanel() {
         ))}
       </div>
 
-      {tab === "meta" && <MetaTab />}
       {tab === "status" && <StatusTab />}
       {tab === "mcp" && <McpTab />}
-    </div>
-  );
-}
-
-function MetaTab() {
-  const [insights, setInsights] = useState<MetaInsightRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
-
-  async function load() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/meta");
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro ao carregar insights.");
-      setInsights(data.insights);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function sync() {
-    setSyncing(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/meta", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Erro ao sincronizar com a Meta.");
-      await load();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSyncing(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <button onClick={sync} disabled={syncing} className="btn-gold rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-60">
-          {syncing ? "Sincronizando..." : "Sincronizar agora"}
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="p-8 text-center text-sm text-ink-400">Carregando...</div>
-      ) : error ? (
-        <GlassCard className="p-5 text-sm text-rose-600">{error}</GlassCard>
-      ) : insights.length === 0 ? (
-        <EmptyState
-          title="Sem dados da Meta ainda"
-          description="Configure FACEBOOK_ACCESS_TOKEN e FACEBOOK_IG_USER_ID no .env.local e clique em 'Sincronizar agora'."
-        />
-      ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {insights.map((m) => (
-            <GlassCard key={m.id} className="p-4">
-              <div className="text-xs font-medium uppercase tracking-wide text-ink-400">
-                {METRIC_LABELS[m.metric] || m.metric}
-              </div>
-              <div className="mt-1 text-2xl font-semibold text-ink-900">
-                {m.value != null ? new Intl.NumberFormat("pt-BR").format(m.value) : "—"}
-              </div>
-            </GlassCard>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -174,6 +84,11 @@ function StatusTab() {
 
 function McpTab() {
   const [logs, setLogs] = useState<any[]>([]);
+  const [origin, setOrigin] = useState("https://studiotita.vercel.app");
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => {
     fetch("/api/integration-logs")
@@ -185,20 +100,33 @@ function McpTab() {
   return (
     <div className="space-y-5">
       <GlassCard strong className="p-5">
-        <h3 className="mb-2 text-sm font-semibold text-ink-900">Como conectar o Claude Code do cliente</h3>
+        <h3 className="mb-2 text-sm font-semibold text-ink-900">Como conectar o Claude do Augusto</h3>
         <p className="mb-3 text-sm text-ink-500">
-          Envie ao seu cliente a URL do sistema publicado e a chave de acesso (MCP_API_KEY). Ele roda este comando no
-          terminal, uma vez:
+          Rode este comando uma vez no terminal do Claude Code, trocando a chave pela MCP_API_KEY (ela não aparece
+          aqui porque esta página é pública):
         </p>
         <pre className="scrollbar-thin overflow-x-auto rounded-xl bg-ink-900 p-4 text-xs text-gold-200">
-{`claude mcp add --transport http videoteca-ig https://SEU_DOMINIO/api/mcp \\
+{`claude mcp add --transport http --scope user videoteca-augusto ${origin}/api/mcp \\
   --header "Authorization: Bearer SUA_MCP_API_KEY" \\
-  --header "X-Client-Name: nome_do_cliente"`}
+  --header "X-Client-Name: augusto"`}
         </pre>
         <p className="mt-3 text-xs text-ink-400">
-          A partir daí, o Claude Code dele ganha as ferramentas: list_videos, get_video, list_scripts, save_script,
-          request_video_analysis, get_analysis_status e get_meta_insights.
+          Ao conectar, o Claude recebe automaticamente o guia do app. Ferramentas disponíveis:
         </p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          {MCP_TOOL_GROUPS.map((g) => (
+            <div key={g.group}>
+              <div className="mb-1 text-xs font-semibold text-ink-700">{g.group}</div>
+              <ul className="space-y-1">
+                {g.tools.map((t) => (
+                  <li key={t.name} className="text-xs text-ink-500">
+                    <code className="rounded bg-ink-100 px-1 text-ink-800">{t.name}</code> {t.what}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       </GlassCard>
 
       <GlassCard strong className="p-5">
