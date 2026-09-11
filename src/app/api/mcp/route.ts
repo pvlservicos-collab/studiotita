@@ -15,7 +15,8 @@ import { registerTools } from "@/mcp/tools";
 import { actorStorage } from "@/mcp/actor";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+// request_video_analysis roda o Gemini em background dentro deste limite.
+export const maxDuration = 300;
 
 // basePath "/api" faz o mcp-handler atender em /api/mcp (o padrão é /mcp).
 // SSE fica desligado: exigiria Redis e o Claude Code usa o transporte HTTP.

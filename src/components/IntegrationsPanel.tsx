@@ -7,13 +7,16 @@ import type { MetaInsightRow } from "@/lib/types";
 type SubTab = "meta" | "status" | "mcp";
 
 const METRIC_LABELS: Record<string, string> = {
-  reach: "Alcance",
-  profile_views: "Visitas ao perfil",
+  reach: "Alcance (dia)",
+  views: "Visualizações (dia)",
+  accounts_engaged: "Contas engajadas (dia)",
+  total_interactions: "Interações (dia)",
+  profile_views: "Visitas ao perfil (dia)",
   follower_count: "Novos seguidores (dia)",
   followers_count: "Seguidores (total)",
   follows_count: "Seguindo",
   media_count: "Publicações",
-  website_clicks: "Cliques no site",
+  website_clicks: "Cliques no site (dia)",
 };
 
 export default function IntegrationsPanel() {

@@ -1,7 +1,7 @@
 // Dados usados nas páginas legais (termos, privacidade, exclusão de dados) e
 // no rodapé. O nome do app deve bater com o nome cadastrado no painel da Meta.
 export const LEGAL = {
-  appName: "NativeAPI",
+  appName: "Inst.titan Analytics IA",
   contactEmail: "pvlservicos@gmail.com",
   siteUrl: "https://pedrovictorweb.com.br",
   lastUpdated: "11 de setembro de 2026",

@@ -4,15 +4,14 @@ import { fetchAccountInsights, fetchAccountSummary } from "@/lib/meta";
 
 export async function syncAccountInsights() {
   const [insights, summary] = await Promise.all([
-    fetchAccountInsights("day"),
+    fetchAccountInsights(),
     fetchAccountSummary(),
   ]);
 
   const rows: { metric: string; period: string; value: number; raw: unknown }[] = [];
 
   for (const item of insights) {
-    const value = item.values?.[0]?.value ?? 0;
-    rows.push({ metric: item.name, period: item.period, value, raw: item });
+    rows.push({ metric: item.name, period: item.period, value: item.value, raw: item });
   }
 
   rows.push({ metric: "followers_count", period: "lifetime", value: summary.followers_count, raw: summary });

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requestAnalysis } from "@/lib/services/analyses";
 import { apiErrorResponse } from "@/lib/apiError";
 
+// A análise continua depois da resposta (waitUntil): download + upload do
+// vídeo + Gemini cabem nesse limite.
+export const maxDuration = 300;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

@@ -80,10 +80,21 @@ export async function syncVideosFromMeta(limit = 25) {
 
     let insights: Record<string, number> = {};
     try {
-      insights = await fetchMediaInsights(item.id);
-    } catch {
+      insights = await fetchMediaInsights(item.id, item.media_product_type);
+    } catch (err) {
       // Alguns tipos de mídia não têm todas as métricas — segue sem travar o sync.
+      console.warn(`Insights indisponíveis para a mídia ${item.id}:`, (err as Error).message);
     }
+
+    const mediaType = item.media_product_type === "REELS" ? "REELS" : item.media_type;
+    const metrics = [
+      insights.views ?? 0,
+      insights.likes ?? 0,
+      insights.comments ?? 0,
+      insights.shares ?? 0,
+      insights.saved ?? 0,
+      insights.reach ?? 0,
+    ];
 
     const existing = await queryOne<{ id: string }>(
       `select id from videos where ig_media_id = $1`,
@@ -95,7 +106,7 @@ export async function syncVideosFromMeta(limit = 25) {
         `update videos set
            caption = $2, thumbnail_url = $3, video_url = $4, permalink = $5,
            posted_at = $6, views = $7, likes = $8, comments = $9, shares = $10,
-           saves = $11, raw_meta = $12
+           saves = $11, reach = $12, raw_meta = $13, media_type = $14
          where id = $1`,
         [
           existing.id,
@@ -104,12 +115,9 @@ export async function syncVideosFromMeta(limit = 25) {
           item.media_url ?? null,
           item.permalink ?? null,
           item.timestamp ?? null,
-          insights.plays ?? insights.reach ?? 0,
-          insights.likes ?? 0,
-          insights.comments ?? 0,
-          insights.shares ?? 0,
-          insights.saved ?? 0,
+          ...metrics,
           JSON.stringify({ media: item, insights }),
+          mediaType,
         ]
       );
       updated++;
@@ -117,21 +125,17 @@ export async function syncVideosFromMeta(limit = 25) {
       await query(
         `insert into videos
            (ig_media_id, source, caption, media_type, thumbnail_url, video_url,
-            permalink, posted_at, views, likes, comments, shares, saves, raw_meta)
-         values ($1,'meta',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+            permalink, posted_at, views, likes, comments, shares, saves, reach, raw_meta)
+         values ($1,'meta',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
         [
           item.id,
           item.caption ?? null,
-          item.media_type,
+          mediaType,
           item.thumbnail_url ?? null,
           item.media_url ?? null,
           item.permalink ?? null,
           item.timestamp ?? null,
-          insights.plays ?? insights.reach ?? 0,
-          insights.likes ?? 0,
-          insights.comments ?? 0,
-          insights.shares ?? 0,
-          insights.saved ?? 0,
+          ...metrics,
           JSON.stringify({ media: item, insights }),
         ]
       );
