@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getScript, updateScript } from "@/lib/services/scripts";
+import { getScript, updateScript, deleteScripts } from "@/lib/services/scripts";
 import { apiErrorResponse } from "@/lib/apiError";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -12,6 +12,18 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       );
     }
     return NextResponse.json({ script });
+  } catch (err) {
+    return apiErrorResponse(err);
+  }
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const deleted = await deleteScripts([params.id]);
+    if (!deleted) {
+      return NextResponse.json({ error: `Roteiro ${params.id} não encontrado.`, code: "NOT_FOUND" }, { status: 404 });
+    }
+    return NextResponse.json({ deleted: true });
   } catch (err) {
     return apiErrorResponse(err);
   }

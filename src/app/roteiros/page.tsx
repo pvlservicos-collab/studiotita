@@ -1,5 +1,5 @@
-import ScriptsBoard from "@/components/ScriptsBoard";
+import RoteirosPage from "@/components/RoteirosPage";
 
-export default function RoteirosPage() {
-  return <ScriptsBoard />;
+export default function Page() {
+  return <RoteirosPage />;
 }

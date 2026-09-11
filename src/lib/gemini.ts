@@ -120,6 +120,9 @@ async function waitUntilActive(fileName: string, apiKey: string, timeoutMs = 60_
 export interface GeminiAnalysisResult {
   summary: string;
   transcript: string;
+  structure: string;
+  hook: string;
+  categories: string[];
   prompt: string;
   model: string;
   raw: unknown;
@@ -130,23 +133,37 @@ export interface GeminiAnalysisResult {
  * mandar outro; o usado fica gravado em analyses.prompt.
  */
 export const DEFAULT_ANALYSIS_PROMPT = `Você é um analista de conteúdo especializado em vídeos curtos do Instagram (Reels).
-Assista ao vídeo inteiro e responda em português do Brasil, preenchendo dois campos:
+Assista ao vídeo inteiro e responda em português do Brasil, preenchendo cinco campos:
 
-1. "resumo": um resumo objetivo do vídeo — do que ele trata, a mensagem principal, o tom, o ritmo e a edição,
-   o gancho dos 3 primeiros segundos, a estrutura (abertura, desenvolvimento, fechamento) e o CTA usado.
+1. "resumo": um resumo objetivo do vídeo — do que ele trata, a mensagem principal, o tom, o ritmo, a edição e o CTA usado.
 
 2. "transcricao": a transcrição completa e literal de tudo o que é falado, do início ao fim, sem resumir nem
    corrigir a fala. Marque o tempo no formato [mm:ss] no início de cada frase ou troca de ideia. Textos que
-   aparecem escritos na tela entram entre colchetes, ex.: [texto na tela: "..."].`;
+   aparecem escritos na tela entram entre colchetes, ex.: [texto na tela: "..."].
 
-// A resposta sempre volta nesses dois campos, mesmo com prompt personalizado.
+3. "estrutura": a estrutura narrativa que o vídeo segue, parte por parte, com o intervalo de segundos de cada
+   parte. Uma linha por parte, no formato "[0s–3s] Nome da parte: o que acontece e qual a função dela"
+   (ex.: gancho, CTA de salvar, blocos de conteúdo, virada, alerta ou solução, CTA de compartilhar,
+   apresentação, CTA final). Cubra o vídeo do início ao fim.
+
+4. "gancho": o gancho do vídeo, ou seja, os primeiros segundos que prendem a atenção. Traga a fala exata
+   (verbal), o texto na tela (textual), o que aparece na imagem (visual), quantos segundos dura e qual
+   técnica ele usa (acusar um erro, negar uma crença, abrir uma lacuna de curiosidade, promessa, etc.).
+
+5. "categorias": de 1 a 3 categorias (temas) abordadas no vídeo, com nomes curtos em português
+   (ex.: "Gestão de tempo", "Política", "Organização", "Alta performance", "Filosofia").`;
+
+// A resposta sempre volta nesses campos, mesmo com prompt personalizado.
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
     resumo: { type: "STRING" },
     transcricao: { type: "STRING" },
+    estrutura: { type: "STRING" },
+    gancho: { type: "STRING" },
+    categorias: { type: "ARRAY", items: { type: "STRING" } },
   },
-  required: ["resumo", "transcricao"],
+  required: ["resumo", "transcricao", "estrutura", "gancho", "categorias"],
 };
 
 /**
@@ -197,7 +214,7 @@ export async function analyzeVideoWithGemini(
   const text: string =
     data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
 
-  let parsed: { resumo?: string; transcricao?: string } = {};
+  let parsed: { resumo?: string; transcricao?: string; estrutura?: string; gancho?: string; categorias?: string[] } = {};
   try {
     parsed = JSON.parse(text);
   } catch {
@@ -208,8 +225,38 @@ export async function analyzeVideoWithGemini(
   return {
     summary: (parsed.resumo ?? "").trim(),
     transcript: (parsed.transcricao ?? "").trim(),
+    structure: (parsed.estrutura ?? "").trim(),
+    hook: (parsed.gancho ?? "").trim(),
+    categories: Array.isArray(parsed.categorias) ? parsed.categorias.map((c) => String(c)) : [],
     prompt,
     model,
     raw: data,
   };
+}
+
+/**
+ * Pedido só de texto ao Gemini (sem vídeo), com resposta em JSON no formato
+ * do schema. Usado para gerar roteiros novos a partir de uma categoria.
+ */
+export async function generateJsonWithGemini<T>(prompt: string, schema: object): Promise<{ result: T; model: string; raw: unknown }> {
+  const apiKey = requireApiKey();
+  const model = modelName();
+  const res = await fetch(`${GEMINI_API_BASE}/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json", responseSchema: schema },
+    }),
+  });
+  if (!res.ok) {
+    throw new GeminiRequestError(`Gemini retornou erro (${res.status}): ${await res.text()}`);
+  }
+  const data = await res.json();
+  const text: string = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
+  try {
+    return { result: JSON.parse(text) as T, model, raw: data };
+  } catch {
+    throw new GeminiRequestError(`O Gemini respondeu fora do formato esperado: ${text.slice(0, 300)}`);
+  }
 }

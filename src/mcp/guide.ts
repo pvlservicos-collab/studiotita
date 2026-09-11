@@ -11,11 +11,13 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
     tools: [{ name: "get_app_guide", what: "Este guia + contagens atuais do banco." }],
   },
   {
-    group: "Vídeos e métricas",
+    group: "Posts e métricas",
     tools: [
-      { name: "list_videos", what: "Vídeos com todas as métricas da Meta e o status da última análise. Ordena por qualquer métrica." },
-      { name: "get_video", what: "Um vídeo com métricas completas e todas as análises (resumo, transcrição, adequação, prompt)." },
-      { name: "sync_videos_from_meta", what: "Puxa os posts mais recentes do Instagram e atualiza as métricas (até 500)." },
+      { name: "list_videos", what: "Vídeos (do Augusto, de um concorrente ou de uma hashtag) com métricas, status da análise e categorias." },
+      { name: "get_best_posts", what: "Melhores posts de um período (30 dias, último mês, trimestre, semestre) por qualquer métrica." },
+      { name: "get_posts_report", what: "Relatório em Markdown de todos os posts ou dos melhores: métricas + tudo o que o Gemini gerou." },
+      { name: "get_video", what: "Um vídeo com métricas completas e todas as análises." },
+      { name: "sync_videos_from_meta", what: "Puxa os posts mais recentes do Augusto e atualiza as métricas (até 500)." },
       { name: "add_video", what: "Cadastra um vídeo manualmente pela URL." },
       { name: "get_account_metrics", what: "Métricas da conta ao vivo (1 a 28 dias): totais, alcance diário, formatos, público." },
     ],
@@ -24,25 +26,49 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
     group: "Análises com o Gemini",
     tools: [
       { name: "get_default_prompt", what: "O prompt padrão enviado ao Gemini e o modelo em uso." },
-      { name: "request_video_analysis", what: "Manda o vídeo ao Gemini (prompt padrão ou personalizado). Resposta em resumo + transcrição." },
+      { name: "request_video_analysis", what: "Manda o vídeo ao Gemini: resumo, transcrição, estrutura por segundo, gancho e categorias." },
       { name: "get_analysis", what: "Status e conteúdo completo de uma análise (por video_id ou analysis_id)." },
-      { name: "save_analysis_fields", what: "Preenche/edita resumo, transcrição e adequação às regras do Augusto. Cria a análise se o vídeo não tiver." },
+      { name: "save_analysis_fields", what: "Preenche/edita resumo, transcrição, estrutura, gancho, categorias e adequação às regras do Augusto." },
+    ],
+  },
+  {
+    group: "Categorias (curadoria)",
+    tools: [
+      { name: "list_categories", what: "Categorias geradas pelo Gemini, com os vídeos e quem está na seleção." },
+      { name: "set_category_video", what: "Liga/desliga um vídeo da seleção de uma categoria." },
+      { name: "get_category_scripts", what: "Roteiros (gancho + estrutura + transcrição) dos vídeos ligados da categoria." },
+      { name: "generate_category_script", what: "Pede ao Gemini um roteiro novo da categoria, no método e na estrutura do Augusto. Salva em Roteiros." },
     ],
   },
   {
     group: "Roteiros",
     tools: [
-      { name: "list_scripts", what: "Roteiros salvos (roteiro completo, gancho, estrutura, status)." },
-      { name: "save_script", what: "Cria um roteiro, opcionalmente ligado a um vídeo." },
+      { name: "list_scripts", what: "Roteiros salvos (roteiro completo, gancho, estrutura, categoria, status)." },
+      { name: "save_script", what: "Cria um roteiro, opcionalmente ligado a um vídeo e a uma categoria." },
       { name: "update_script", what: "Edita qualquer campo de um roteiro." },
+      { name: "delete_scripts", what: "Exclui um ou vários roteiros." },
+    ],
+  },
+  {
+    group: "Concorrência",
+    tools: [
+      { name: "list_competitors", what: "Concorrentes com médias dos últimos 30 vídeos e as médias do Augusto para comparar." },
+      { name: "add_competitors", what: "Adiciona concorrentes por link do Instagram ou @ (só contas profissionais)." },
+      { name: "sync_competitor", what: "Atualiza perfil e vídeos de um concorrente (até 300)." },
+      { name: "remove_competitor", what: "Remove um concorrente e os vídeos dele." },
+      { name: "search_hashtag", what: "Posts em alta ou recentes de uma hashtag (limite da Meta: 30 hashtags diferentes/semana)." },
+      { name: "list_hashtag_searches", what: "Hashtags já buscadas e a cota da semana." },
     ],
   },
   {
     group: "Biblioteca de arquivos",
     tools: [
-      { name: "list_files", what: "Arquivos da biblioteca (roteiros antigos, transcrições de aula...). Busca no texto." },
-      { name: "get_file", what: "Um arquivo com o texto completo extraído." },
-      { name: "save_text_file", what: "Salva um texto como arquivo novo na biblioteca." },
+      { name: "list_files", what: "Arquivos (método, briefing, transcrições de aula, roteiros antigos...). Busca no texto." },
+      { name: "list_file_sections", what: "Os títulos (seções) de um arquivo, para pedir só a parte que interessa." },
+      { name: "get_file_section", what: "O conteúdo de uma seção." },
+      { name: "search_library", what: "Busca um termo em todas as seções da biblioteca, com trechos." },
+      { name: "get_file", what: "Um arquivo com o texto (em partes, via max_chars/offset)." },
+      { name: "save_text_file", what: "Salva um texto como arquivo novo (já dividido em títulos)." },
       { name: "update_file", what: "Edita nome, categoria, descrição ou texto de um arquivo." },
       { name: "delete_file", what: "Apaga um arquivo (banco + Blob)." },
     ],
@@ -62,18 +88,19 @@ const metricLegend = VIDEO_METRICS.map(
 ).join("; ");
 
 export const MCP_INSTRUCTIONS = `Você está conectado à Videoteca do Augusto (studiotita.vercel.app): a central de conteúdo do Instagram @augustotita.
-O app guarda os reels com as métricas da Meta, as análises do Gemini (resumo + transcrição), os roteiros e uma biblioteca de arquivos (roteiros antigos, transcrições de aula). Você tem acesso total: pode ler, criar, editar e apagar qualquer coisa, inclusive via SQL direto.
+O app guarda os reels com as métricas da Meta, as análises do Gemini, os roteiros, a curadoria por categoria, a pesquisa de concorrentes e hashtags, e a biblioteca de arquivos do Augusto (método de roteiro, briefing, 5 volumes de Base de Ensino das aulas, referências científicas). Você tem acesso total: pode ler, criar, editar e apagar qualquer coisa, inclusive via SQL direto.
 
 COMO O APP FUNCIONA
-- Vídeos: sync_videos_from_meta atualiza os reels e as métricas. Cada vídeo tem colunas principais (views, reach, likes, comments, shares, saves) e o campo "metrics" com tudo o que a Meta informa: ${metricLegend}. Use esses números para decidir o que funciona (ex.: salvamentos e compartilhamentos altos = conteúdo de valor; taxa de pulo alta = gancho fraco).
-- Análises: request_video_analysis manda o vídeo ao Gemini. O prompt é livre (use get_default_prompt para ver o padrão), mas a resposta sempre volta em dois campos: summary (resumo) e transcript (transcrição). O prompt e o modelo usados ficam gravados na análise. Leva ~30-60s; acompanhe com get_analysis. Cada análise custa uso da API do Gemini: só dispare quando o usuário pedir.
-- Adequação às regras do Augusto (campo rules_fit): começa vazio. Preencha com save_analysis_fields quando o usuário pedir, comparando o vídeo/transcrição com as regras do Augusto (procure as regras na biblioteca com list_files ou pergunte ao usuário).
-- Roteiros: save_script / update_script. Campos: title, full_script, hook (primeiros 3s), structure, status (draft|ready|published|archived), video_id opcional.
-- Biblioteca: list_files busca no nome e no texto; get_file traz o texto completo. Use como referência de estilo e conteúdo do Augusto ao escrever roteiros.
-- Métricas da conta: get_account_metrics(days).
-- Acesso total: get_db_schema + run_sql para qualquer consulta ou alteração; meta_graph_api para qualquer chamada à Meta (comentários, público, publicação...). Atenção: POST/DELETE em meta_graph_api agem na conta real do Instagram.
+- Posts: sync_videos_from_meta atualiza os reels do Augusto. Cada vídeo tem colunas (views, reach, likes, comments, shares, saves) e o campo "metrics" com tudo o que a Meta informa: ${metricLegend}. Use esses números para decidir (salvamentos e compartilhamentos altos = conteúdo de valor; taxa de pulo alta = gancho fraco). get_best_posts faz o recorte "Melhores posts" por período; get_posts_report gera o relatório completo.
+- Análises: request_video_analysis manda o vídeo ao Gemini. A resposta sempre volta em: summary (resumo), transcript (transcrição), structure (estrutura narrativa parte por parte com os segundos), hook (gancho: fala, texto na tela, visual, duração e técnica) e categories (temas). Esses campos são sempre gerados pelo Gemini. O prompt e o modelo usados ficam gravados. Leva ~30-60s; acompanhe com get_analysis. Cada análise consome a API do Gemini: só dispare quando o usuário pedir.
+- Adequação às regras do Augusto (rules_fit): começa vazia. Preencha com save_analysis_fields quando o usuário pedir, comparando a transcrição com o método (arquivos de método e briefing da biblioteca).
+- Categorias: vêm das análises. list_categories mostra a curadoria; vídeos desligados (set_category_video) não entram em get_category_scripts nem em generate_category_script. generate_category_script usa os arquivos "prompt-roteiros-ascensao-tita.md" e "estrutura-roteiro-reel.md" da biblioteca.
+- Concorrência: add_competitors aceita links/@ de contas profissionais. Os vídeos deles ficam em list_videos(scope="competitor", competitor_id=...) e podem ser analisados pelo Gemini como os do Augusto (se a Meta não liberar o arquivo por música licenciada, o usuário envia o vídeo pelo painel). De concorrentes e hashtags a Meta informa views/curtidas/comentários; salvamentos, compartilhamentos e alcance ficam nulos. search_hashtag: no máximo 30 hashtags DIFERENTES por 7 dias (repetir não gasta); confira a cota com list_hashtag_searches antes.
+- Biblioteca: os arquivos estão divididos em seções com título (as Bases de Ensino têm ~2 mil passagens cada, com a sessão de origem "— S01"). Prefira search_library e get_file_section a ler arquivos inteiros. Siga as regras de fidelidade do arquivo "instrucoes_do_projeto.md": nunca invente falas do Augusto, cite verbatim.
+- Roteiros: save_script / update_script / delete_scripts. Campos: title, full_script, hook (primeiros 3s), structure, status (draft|ready|published|archived), category, video_id opcional.
+- Acesso total: get_db_schema + run_sql para qualquer consulta ou alteração; meta_graph_api para qualquer chamada à Meta. Atenção: POST/DELETE em meta_graph_api agem na conta real do Instagram, confirme com o usuário antes.
 
-IDs úteis: todos os ids internos são UUID. ig_media_id é o id do post na Meta.
+IDs: todos os ids internos são UUID. ig_media_id é o id do post na Meta.
 Tudo o que você faz fica registrado na tabela integration_logs.`;
 
 export function renderToolList() {

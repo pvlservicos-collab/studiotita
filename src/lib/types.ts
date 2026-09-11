@@ -1,7 +1,29 @@
+export interface CompetitorRow {
+  id: string;
+  username: string;
+  name: string | null;
+  biography: string | null;
+  website: string | null;
+  followers_count: number | null;
+  follows_count: number | null;
+  media_count: number | null;
+  profile_picture_url: string | null;
+  notes: string | null;
+  last_synced_at: string | null;
+  created_at: string;
+  video_count?: number;
+  avg_views?: number | null;
+  avg_likes?: number | null;
+  avg_comments?: number | null;
+}
+
 export interface VideoRow {
   id: string;
   ig_media_id: string | null;
-  source: "meta" | "manual" | "claude_code";
+  source: "meta" | "manual" | "claude_code" | "competitor" | "hashtag";
+  competitor_id?: string | null;
+  competitor_username?: string | null;
+  hashtag?: string | null;
   caption: string | null;
   media_type: string | null;
   thumbnail_url: string | null;
@@ -23,6 +45,7 @@ export interface VideoRow {
   latest_analysis_id?: string | null;
   latest_analysis_status?: AnalysisStatus | null;
   latest_analysis_summary?: string | null;
+  latest_analysis_categories?: string[] | null;
 }
 
 export type AnalysisStatus = "pending" | "processing" | "done" | "error";
@@ -34,6 +57,12 @@ export interface AnalysisRow {
   status: AnalysisStatus;
   summary: string | null;
   transcript: string | null;
+  /** Estrutura narrativa por parte/segundo — gerada pelo Gemini. */
+  structure: string | null;
+  /** Gancho (primeiros segundos) — identificado pelo Gemini. */
+  hook: string | null;
+  /** Categorias/temas do vídeo — geradas pelo Gemini. */
+  categories: string[] | null;
   /** Adequação às regras do Augusto — preenchida depois, à mão ou pelo Claude. */
   rules_fit: string | null;
   /** Campo das análises antigas (antes do prompt com resumo + transcrição). */
@@ -57,6 +86,8 @@ export interface FileRow {
   size_bytes: number | null;
   text_content?: string | null;
   text_length?: number;
+  section_count?: number;
+  source_path?: string | null;
   source: "upload" | "claude_code";
   created_by: string | null;
   created_at: string;
@@ -71,7 +102,9 @@ export interface ScriptRow {
   hook: string;
   structure: string;
   status: "draft" | "ready" | "published" | "archived";
-  source: "manual" | "claude_code";
+  source: "manual" | "claude_code" | "gemini";
+  category?: string | null;
+  generation_prompt?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

@@ -4,6 +4,9 @@ import { GeminiConfigError, GeminiRequestError } from "@/lib/gemini";
 import { MetaConfigError, MetaRequestError } from "@/lib/meta";
 import { AnalysisInputError } from "@/lib/services/analyses";
 import { FileInputError } from "@/lib/services/files";
+import { CompetitorInputError } from "@/lib/services/competitors";
+import { HashtagInputError } from "@/lib/services/hashtags";
+import { CategoryInputError } from "@/lib/services/categories";
 
 /**
  * Converte erros conhecidos em respostas JSON claras: { error, code, hint }.
@@ -31,6 +34,9 @@ export function toApiError(err: unknown): { status: number; body: any } {
   }
   if (err instanceof FileInputError) {
     return { status: 400, body: { error: err.message, code: "FILE_INPUT_INVALID" } };
+  }
+  if (err instanceof CompetitorInputError || err instanceof HashtagInputError || err instanceof CategoryInputError) {
+    return { status: 400, body: { error: err.message, code: "INPUT_INVALID" } };
   }
   console.error(err);
   return {

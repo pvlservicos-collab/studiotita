@@ -57,6 +57,7 @@ export default function AnalysisModal({
 
   const selected = history.find((a) => a.id === selectedId) ?? history[0] ?? null;
   const metrics = video.metrics ?? {};
+  const isImage = video.media_type === "IMAGE" || video.media_type === "CAROUSEL_ALBUM";
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink-900/40 p-3 backdrop-blur-sm sm:p-8" onClick={onClose}>
@@ -100,6 +101,15 @@ export default function AnalysisModal({
         </div>
 
         <div className="space-y-5 p-4 sm:p-5">
+          {isImage ? (
+            <p className="rounded-xl bg-ink-50 px-4 py-3 text-sm text-ink-600">
+              Este post é uma imagem ou carrossel. O Gemini só analisa vídeos.
+            </p>
+          ) : (
+            (video.source === "competitor" || video.source === "hashtag" || video.blob_url) && (
+              <VideoFileUpload video={video} onUploaded={onChanged} />
+            )
+          )}
           {/* histórico + nova análise */}
           <div className="flex flex-wrap items-center gap-2">
             {history.map((a, i) => (
@@ -118,7 +128,7 @@ export default function AnalysisModal({
             ))}
             <button
               onClick={() => setMode("new")}
-              disabled={busy}
+              disabled={busy || isImage}
               className={`rounded-full px-3 py-1 text-xs font-medium transition disabled:opacity-50 ${
                 mode === "new" ? "btn-gold" : "border border-gold-300 text-gold-700 hover:bg-gold-50"
               }`}
@@ -129,7 +139,7 @@ export default function AnalysisModal({
 
           {loading ? (
             <p className="text-sm text-ink-400">Carregando...</p>
-          ) : mode === "new" ? (
+          ) : mode === "new" && !isImage ? (
             <NewAnalysisForm
               videoId={video.id}
               onSent={() => {
@@ -160,6 +170,7 @@ function NewAnalysisForm({ videoId, onSent }: { videoId: string; onSent: () => v
   const [prompt, setPrompt] = useState("");
   const [defaultPrompt, setDefaultPrompt] = useState("");
   const [model, setModel] = useState("");
+  const [hint, setHint] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -170,6 +181,7 @@ function NewAnalysisForm({ videoId, onSent }: { videoId: string; onSent: () => v
         setPrompt(d.default_prompt);
         setDefaultPrompt(d.default_prompt);
         setModel(d.model);
+        setHint(d.categories_hint ?? "");
       });
   }, []);
 
@@ -199,8 +211,9 @@ function NewAnalysisForm({ videoId, onSent }: { videoId: string; onSent: () => v
         <Badge tone="gold">✦ Gemini · {model || "..."}</Badge>
       </div>
       <p className="text-xs text-ink-500">
-        O Gemini recebe o vídeo + este texto. A resposta sempre volta em dois campos: <strong>resumo</strong> e{" "}
-        <strong>transcrição</strong>. Você pode ajustar o pedido antes de enviar. O prompt usado fica salvo junto com a análise.
+        O Gemini recebe o vídeo + este texto. A resposta sempre volta em cinco campos: <strong>resumo</strong>,{" "}
+        <strong>transcrição</strong>, <strong>estrutura</strong>, <strong>gancho</strong> e <strong>categorias</strong>. Você pode
+        ajustar o pedido antes de enviar. O prompt usado fica salvo junto com a análise.
       </p>
       <textarea
         value={prompt}
@@ -208,6 +221,12 @@ function NewAnalysisForm({ videoId, onSent }: { videoId: string; onSent: () => v
         rows={12}
         className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 font-mono text-xs leading-relaxed text-ink-700 outline-none focus:border-gold-400"
       />
+      {hint && (
+        <p className="rounded-lg bg-white/70 px-3 py-2 text-[11px] leading-relaxed text-ink-500">
+          <strong className="text-ink-700">Acrescentado automaticamente ao fim do prompt</strong> (para o Gemini reaproveitar as categorias
+          que já existem): {hint}
+        </p>
+      )}
       {error && <p className="text-xs text-rose-600">{error}</p>}
       <div className="flex flex-wrap justify-between gap-2">
         <button
@@ -273,6 +292,25 @@ function AnalysisView({ analysis, onSaved }: { analysis: AnalysisRow; onSaved: (
             value={analysis.summary}
             onSave={(v) => save("summary", v)}
           />
+          <GeminiField title="Gancho identificado pelo Gemini" value={analysis.hook} />
+          <GeminiField title="Estrutura gerada pelo Gemini" value={analysis.structure} />
+          <section className="rounded-xl border border-ink-100 bg-white/70 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-ink-900">Categorias</h3>
+              <span className="text-[11px] text-ink-400">geradas pelo Gemini</span>
+            </div>
+            {analysis.categories?.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {analysis.categories.map((c) => (
+                  <span key={c} className="rounded-full bg-gold-100 px-2.5 py-1 text-xs font-medium text-gold-700">
+                    {c}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-ink-400">Esta análise não tem categorias (foi feita com um prompt antigo). Peça uma nova análise.</p>
+            )}
+          </section>
           <EditableField
             title="Transcrição"
             tag="gerada pelo Gemini"
@@ -304,6 +342,65 @@ function AnalysisView({ analysis, onSaved }: { analysis: AnalysisRow; onSaved: (
           {analysis.prompt || "Prompt não registrado (análise feita antes desta versão)."}
         </pre>
       </details>
+    </div>
+  );
+}
+
+/** Campo sempre gerado pelo Gemini: só leitura no painel, para ficar claro de onde veio. */
+function GeminiField({ title, value }: { title: string; value: string | null }) {
+  return (
+    <section className="rounded-xl border border-ink-100 bg-white/70 p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-ink-900">{title}</h3>
+        <span className="rounded-full bg-gold-50 px-2 py-0.5 text-[10.5px] font-medium text-gold-700">✦ Gemini</span>
+      </div>
+      {value ? (
+        <div className="whitespace-pre-wrap text-sm leading-relaxed text-ink-700">{value}</div>
+      ) : (
+        <p className="text-sm text-ink-400">Esta análise não tem este campo (foi feita com um prompt antigo). Peça uma nova análise.</p>
+      )}
+    </section>
+  );
+}
+
+/** Envio manual do arquivo do vídeo, quando a Meta não libera o original (reels com música licenciada). */
+function VideoFileUpload({ video, onUploaded }: { video: VideoRow; onUploaded: () => void }) {
+  const [status, setStatus] = useState<"idle" | "sending" | "ok" | "error">(video.blob_url ? "ok" : "idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function send(file: File | undefined) {
+    if (!file) return;
+    setStatus("sending");
+    setError(null);
+    try {
+      const { upload } = await import("@vercel/blob/client");
+      const blob = await upload(`videos/${video.id}-${file.name}`, file, { access: "public", handleUploadUrl: "/api/files/upload" });
+      const res = await fetch(`/api/videos/${video.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ blob_url: blob.url }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Erro ao salvar o arquivo.");
+      setStatus("ok");
+      onUploaded();
+    } catch (err) {
+      setStatus("error");
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-ink-200 bg-ink-50/60 px-4 py-3 text-xs text-ink-600">
+      <span>
+        {status === "ok"
+          ? "✓ Arquivo do vídeo enviado: o Gemini vai usar esta cópia."
+          : "Se a análise falhar porque a Meta não libera o arquivo (reels com música licenciada), baixe o vídeo e envie aqui."}
+        {error && <span className="ml-1 text-rose-600">{error}</span>}
+      </span>
+      <label className="cursor-pointer rounded-lg border border-gold-300 bg-white px-3 py-1.5 font-semibold text-gold-700 hover:bg-gold-50">
+        {status === "sending" ? "Enviando..." : status === "ok" ? "Trocar arquivo" : "Enviar arquivo do vídeo"}
+        <input type="file" accept="video/*" className="hidden" disabled={status === "sending"} onChange={(e) => send(e.target.files?.[0])} />
+      </label>
     </div>
   );
 }

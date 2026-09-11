@@ -29,4 +29,6 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-.vercel
+# material privado do Augusto (vai para a Biblioteca pelo npm run import:base, não para o git)
+/arquivos base/
+/icone.png

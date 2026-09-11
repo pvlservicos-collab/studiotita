@@ -4,20 +4,82 @@
  * files.text_content, que é o que o Claude do Augusto lê e pesquisa.
  */
 import { put, del } from "@vercel/blob";
-import { query, queryOne } from "@/lib/db";
+import { getPool, query, queryOne } from "@/lib/db";
+import { splitIntoSections } from "@/lib/sections";
 import type { FileRow } from "@/lib/types";
 
-export const FILE_CATEGORIES = [
-  { id: "roteiro_antigo", label: "Roteiro antigo" },
-  { id: "transcricao_aula", label: "Transcrição de aula" },
-  { id: "outro", label: "Outro" },
-];
+export { FILE_CATEGORIES } from "@/lib/fileCategories";
+
+export interface FileSectionRow {
+  id: string;
+  file_id: string;
+  position: number;
+  level: number;
+  title: string;
+  content?: string;
+  char_count: number;
+}
+
+/**
+ * Refaz as seções (títulos) de um arquivo a partir do texto. Referências
+ * científicas são divididas em partes fixas (os "títulos" delas seriam ruído).
+ */
+export async function rebuildSections(fileId: string, text: string | null, fileName: string, category?: string) {
+  await query(`delete from file_sections where file_id = $1`, [fileId]);
+  if (!text?.trim()) return 0;
+  const sections = splitIntoSections(text, fileName, category === "referencia_cientifica" ? "chunks" : "auto");
+  // insere em lotes com unnest (as Bases de Ensino têm ~2 mil seções cada)
+  for (let i = 0; i < sections.length; i += 500) {
+    const batch = sections.slice(i, i + 500);
+    await getPool().query(
+      `insert into file_sections (file_id, position, level, title, content, char_count)
+       select $1, * from unnest($2::int[], $3::int[], $4::text[], $5::text[], $6::int[])`,
+      [
+        fileId,
+        batch.map((_, j) => i + j),
+        batch.map((s) => s.level),
+        batch.map((s) => s.title.slice(0, 300)),
+        batch.map((s) => s.content),
+        batch.map((s) => s.content.length),
+      ]
+    );
+  }
+  return sections.length;
+}
+
+export async function listSections(fileId: string): Promise<FileSectionRow[]> {
+  return query<FileSectionRow>(
+    `select id, file_id, position, level, title, char_count from file_sections where file_id = $1 order by position`,
+    [fileId]
+  );
+}
+
+export async function getSection(id: string) {
+  return queryOne<FileSectionRow & { file_name: string }>(
+    `select s.*, f.name as file_name from file_sections s join files f on f.id = s.file_id where s.id = $1`,
+    [id]
+  );
+}
+
+/** Busca em todas as seções da biblioteca; devolve título, arquivo e um trecho em volta do termo. */
+export async function searchLibrary(term: string, limit = 30) {
+  return query<{ section_id: string; file_id: string; file_name: string; category: string; title: string; snippet: string }>(
+    `select s.id as section_id, s.file_id, f.name as file_name, f.category, s.title,
+            substr(s.content, greatest(1, position(lower($1) in lower(s.content)) - 200), 500) as snippet
+     from file_sections s join files f on f.id = s.file_id
+     where s.content ilike $2 or s.title ilike $2
+     order by f.category, f.name, s.position
+     limit $3`,
+    [term, `%${term}%`, limit]
+  );
+}
 
 export class FileInputError extends Error {}
 
 // Lista sem o texto inteiro (pode ser grande); get_file traz o conteúdo.
-const LIST_COLUMNS = `id, name, category, description, blob_url, content_type, size_bytes, source,
-  created_by, created_at, updated_at, coalesce(length(text_content), 0)::int as text_length`;
+const LIST_COLUMNS = `id, name, category, description, blob_url, content_type, size_bytes, source, source_path,
+  created_by, created_at, updated_at, coalesce(length(text_content), 0)::int as text_length,
+  (select count(*)::int from file_sections s where s.file_id = files.id) as section_count`;
 
 export async function listFiles(opts: { category?: string; search?: string } = {}): Promise<FileRow[]> {
   const where: string[] = [];
@@ -100,6 +162,7 @@ export async function registerUploadedFile(input: RegisterUploadInput): Promise<
     ]
   );
   if (!row) throw new Error("Falha ao registrar arquivo.");
+  await rebuildSections(row.id, text, row.name, row.category);
   return row;
 }
 
@@ -143,6 +206,7 @@ export async function createTextFile(input: CreateTextFileInput): Promise<FileRo
     ]
   );
   if (!row) throw new Error("Falha ao criar arquivo.");
+  await rebuildSections(row.id, input.text, row.name, row.category);
   return row;
 }
 
@@ -154,7 +218,7 @@ export interface UpdateFileInput {
 }
 
 export async function updateFile(id: string, input: UpdateFileInput): Promise<FileRow | null> {
-  return queryOne<FileRow>(
+  const row = await queryOne<FileRow>(
     `update files set
        name         = coalesce($2, name),
        category     = coalesce($3, category),
@@ -172,6 +236,10 @@ export async function updateFile(id: string, input: UpdateFileInput): Promise<Fi
       input.text_content ?? null,
     ]
   );
+  if (row && input.text_content !== undefined) {
+    await rebuildSections(row.id, row.text_content ?? null, row.name, row.category);
+  }
+  return row;
 }
 
 export async function deleteFile(id: string): Promise<boolean> {

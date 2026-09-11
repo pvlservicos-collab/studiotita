@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/", label: "Vídeos" },
+  { href: "/", label: "Posts" },
   { href: "/metricas", label: "Métricas" },
   { href: "/roteiros", label: "Roteiros" },
   { href: "/biblioteca", label: "Biblioteca" },
+  { href: "/concorrencia", label: "Concorrência" },
   { href: "/integracoes", label: "Integrações" },
 ];
 
@@ -27,7 +28,7 @@ export default function TopNav() {
 
       <nav className="flex flex-wrap items-center gap-1 rounded-full bg-white/60 p-1">
         {TABS.map((tab) => {
-          const active = pathname === tab.href;
+          const active = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
           return (
             <Link
               key={tab.href}

@@ -183,6 +183,123 @@ export async function fetchAccountSummary() {
 }
 
 // ---------------------------------------------------------------------------
+// Concorrência: Business Discovery (contas profissionais) e hashtags.
+// Só leitura, sob demanda, dentro dos limites da Meta.
+// ---------------------------------------------------------------------------
+
+export interface DiscoveryMedia {
+  id: string;
+  caption?: string;
+  media_type: string;
+  media_product_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  permalink?: string;
+  timestamp?: string;
+  like_count?: number;
+  comments_count?: number;
+  view_count?: number;
+}
+
+export interface DiscoveryProfile {
+  username: string;
+  name?: string;
+  biography?: string;
+  website?: string;
+  followers_count?: number;
+  follows_count?: number;
+  media_count?: number;
+  profile_picture_url?: string;
+}
+
+// view_count vem para reels de outras contas; media_url some quando o reel usa música licenciada.
+const DISCOVERY_MEDIA_FIELDS =
+  "id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count,view_count";
+
+/** Perfil e posts recentes de uma conta profissional, paginando até mediaLimit. */
+export async function fetchBusinessDiscovery(username: string, mediaLimit = 50) {
+  const { igUserId } = requireConfig();
+  const profileFields = "username,name,biography,website,followers_count,follows_count,media_count,profile_picture_url";
+  const media: DiscoveryMedia[] = [];
+  let profile: DiscoveryProfile | null = null;
+  let after: string | undefined;
+
+  do {
+    const page = Math.min(50, mediaLimit - media.length);
+    const mediaEdge = `media${after ? `.after(${after})` : ""}.limit(${page}){${DISCOVERY_MEDIA_FIELDS}}`;
+    let data;
+    try {
+      data = await graphGet(igUserId, {
+        fields: `business_discovery.username(${username}){${profile ? "" : `${profileFields},`}${mediaEdge}}`,
+      });
+    } catch (err) {
+      if (/Invalid user id|does not exist|cannot be found/i.test((err as Error).message)) {
+        throw new MetaRequestError(
+          `A conta @${username} não foi encontrada ou não é profissional. A Meta só mostra contas comerciais ou de criador de conteúdo.`
+        );
+      }
+      throw err;
+    }
+    const bd = data.business_discovery;
+    if (!profile) profile = { ...bd, media: undefined } as DiscoveryProfile;
+    media.push(...((bd.media?.data ?? []) as DiscoveryMedia[]));
+    after = bd.media?.paging?.cursors?.after;
+    if (!bd.media?.paging?.next) after = undefined;
+  } while (after && media.length < mediaLimit);
+
+  return { profile: profile!, media };
+}
+
+/** Hashtags que a Meta conta na janela de 7 dias (fonte oficial do limite de 30). */
+export async function fetchRecentlySearchedHashtags(): Promise<string[]> {
+  const { igUserId } = requireConfig();
+  const data = await graphGet(`${igUserId}/recently_searched_hashtags`, { limit: "30" });
+  return (data.data ?? []).map((h: { name?: string }) => h.name?.toLocaleLowerCase("pt-BR")).filter(Boolean);
+}
+
+export async function fetchHashtagId(hashtag: string): Promise<string> {
+  const { igUserId } = requireConfig();
+  const data = await graphGet("ig_hashtag_search", { user_id: igUserId, q: hashtag });
+  const id = data.data?.[0]?.id;
+  if (!id) throw new MetaRequestError(`A Meta não encontrou a hashtag #${hashtag}.`);
+  return id;
+}
+
+const HASHTAG_MEDIA_FIELDS =
+  "id,caption,media_type,media_product_type,media_url,permalink,timestamp,like_count,comments_count";
+
+/**
+ * Posts de uma hashtag ("top_media" = em alta, "recent_media" = últimas 24h).
+ * A Meta recusa páginas grandes nesse endpoint, então vamos de 5 em 5.
+ */
+export async function fetchHashtagMedia(hashtagId: string, edge: "top_media" | "recent_media", max = 25) {
+  const { igUserId } = requireConfig();
+  const items: DiscoveryMedia[] = [];
+  let next: string | undefined;
+  let limit = 5;
+  while (items.length < max) {
+    let data;
+    try {
+      data = next
+        ? await graphGet(next, {})
+        : await graphGet(`${hashtagId}/${edge}`, { user_id: igUserId, fields: HASHTAG_MEDIA_FIELDS, limit: String(limit) });
+    } catch (err) {
+      // "reduce the amount of data": tenta uma página menor uma vez, depois para com o que já veio
+      if (/reduce the amount of data/i.test((err as Error).message) && limit > 2 && !next) {
+        limit = 2;
+        continue;
+      }
+      if (items.length) break;
+      throw err;
+    }
+    items.push(...((data.data ?? []) as DiscoveryMedia[]));
+    next = data.paging?.next;
+    if (!next) break;
+  }
+  return items.slice(0, max);
+}
+
+// ---------------------------------------------------------------------------
 // Painel completo de métricas da conta (aba Métricas e MCP)
 // ---------------------------------------------------------------------------
 

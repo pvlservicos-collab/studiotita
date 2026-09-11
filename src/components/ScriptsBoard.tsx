@@ -37,8 +37,8 @@ export default function ScriptsBoard() {
             Seus <span className="gold-gradient-text">roteiros</span>
           </h1>
           <p className="mt-1 text-sm text-ink-500">
-            Roteiro completo, gancho (3 primeiros segundos) e estrutura — salvos manualmente ou pelo Claude Code do
-            cliente.
+            Roteiro completo, gancho (3 primeiros segundos) e estrutura. Criados à mão, pelo Claude do Augusto ou gerados pelo
+            Gemini a partir de uma categoria.
           </p>
         </div>
         <button
@@ -63,7 +63,7 @@ export default function ScriptsBoard() {
       ) : (
         <div className="space-y-6">
           {scripts.map((script) => (
-            <ScriptCard key={script.id} script={script} />
+            <ScriptCard key={script.id} script={script} onDeleted={load} />
           ))}
         </div>
       )}
@@ -71,14 +71,21 @@ export default function ScriptsBoard() {
   );
 }
 
-function ScriptCard({ script }: { script: ScriptRow }) {
+function ScriptCard({ script, onDeleted }: { script: ScriptRow; onDeleted: () => void }) {
+  async function remove() {
+    if (!confirm(`Excluir o roteiro "${script.title}"? Não dá para desfazer.`)) return;
+    const res = await fetch(`/api/scripts/${script.id}`, { method: "DELETE" });
+    if (res.ok) onDeleted();
+  }
+
   return (
     <GlassCard strong className="p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold text-ink-900">{script.title}</h3>
-        <div className="flex items-center gap-2">
-          <Badge tone={script.source === "claude_code" ? "gold" : "neutral"}>
-            {script.source === "claude_code" ? "via Claude Code" : "manual"}
+        <div className="flex flex-wrap items-center gap-2">
+          {script.category && <Badge tone="gold">{script.category}</Badge>}
+          <Badge tone={script.source === "manual" ? "neutral" : "gold"}>
+            {script.source === "gemini" ? "✦ gerado pelo Gemini" : script.source === "claude_code" ? "via Claude" : "manual"}
           </Badge>
           <Badge
             tone={
@@ -87,6 +94,9 @@ function ScriptCard({ script }: { script: ScriptRow }) {
           >
             {script.status}
           </Badge>
+          <button onClick={remove} className="rounded-lg px-2 py-1 text-xs text-rose-600 hover:bg-rose-50">
+            Excluir
+          </button>
         </div>
       </div>
 
@@ -110,6 +120,17 @@ function ScriptCard({ script }: { script: ScriptRow }) {
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-700">{script.structure || "—"}</p>
         </div>
       </div>
+
+      {script.generation_prompt && (
+        <details className="mt-3 rounded-xl border border-ink-100 bg-ink-50/60 p-3">
+          <summary className="cursor-pointer select-none text-sm font-medium text-ink-700">
+            Pedido enviado ao Gemini para gerar este roteiro
+          </summary>
+          <pre className="scrollbar-thin mt-3 max-h-80 overflow-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-ink-600">
+            {script.generation_prompt}
+          </pre>
+        </details>
+      )}
 
       {script.latest_analysis_summary && (
         <div className="mt-3 rounded-xl border border-gold-200 bg-gold-50/40 p-4">

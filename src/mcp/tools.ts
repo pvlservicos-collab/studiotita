@@ -8,9 +8,23 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getPool, query, queryOne } from "@/lib/db";
 import { listVideos, getVideo, createVideo, syncVideosFromMeta } from "@/lib/services/videos";
-import { listScripts, createScript, updateScript } from "@/lib/services/scripts";
+import { listScripts, createScript, updateScript, deleteScripts } from "@/lib/services/scripts";
 import { requestAnalysis, getAnalysis, getLatestAnalysis, listAnalysesForVideo, updateAnalysis } from "@/lib/services/analyses";
-import { listFiles, getFile, createTextFile, updateFile, deleteFile, FILE_CATEGORIES } from "@/lib/services/files";
+import {
+  listFiles,
+  getFile,
+  createTextFile,
+  updateFile,
+  deleteFile,
+  listSections,
+  getSection,
+  searchLibrary,
+  FILE_CATEGORIES,
+} from "@/lib/services/files";
+import { listCategories, setCategorySelection, compileCategoryScripts, generateCategoryScript } from "@/lib/services/categories";
+import { addCompetitors, getOwnStats, listCompetitors, removeCompetitor, syncCompetitor } from "@/lib/services/competitors";
+import { getHashtagQuota, listHashtagSearches, searchHashtag } from "@/lib/services/hashtags";
+import { buildReport, selectPosts } from "@/lib/services/report";
 import { fetchAccountMetrics, metaGraphRequest, metaIds } from "@/lib/meta";
 import { DEFAULT_ANALYSIS_PROMPT } from "@/lib/gemini";
 import { toApiError } from "@/lib/apiError";
@@ -20,7 +34,7 @@ import type { AnalysisRow, VideoRow } from "@/lib/types";
 
 function textResult(value: unknown) {
   return {
-    content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
+    content: [{ type: "text" as const, text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
   };
 }
 
@@ -55,13 +69,24 @@ function slimVideo(v: VideoRow & { raw_meta?: unknown }) {
   return rest;
 }
 
-/** raw_response é a resposta bruta do Gemini: grande e redundante com summary/transcript. */
+/** raw_response é a resposta bruta do Gemini: grande e redundante com os campos. */
 function slimAnalysis(a: AnalysisRow & { raw_response?: unknown }) {
   const { raw_response: _raw, ...rest } = a;
   return rest;
 }
 
 type ToolConfig = { title: string; description: string; inputSchema: Record<string, z.ZodTypeAny> };
+
+const scopeSchema = {
+  scope: z.enum(["own", "competitor", "hashtag", "all"]).optional().describe("own = Augusto (padrão), competitor, hashtag ou all"),
+  competitor_id: z.string().optional().describe("UUID do concorrente (com scope=competitor)"),
+  hashtag: z.string().optional().describe("Hashtag sem # (com scope=hashtag)"),
+};
+const bestSchema = {
+  period: z.enum(["30d", "last_month", "quarter", "semester"]).optional().describe("30d (padrão), last_month, quarter (90 dias), semester (180 dias)"),
+  metric: z.enum(["views", "saves", "shares", "comments", "likes", "engagement"]).optional().describe("Métrica do ranking (padrão views)"),
+  top: z.number().int().positive().optional().describe("Quantos posts (padrão: todos do período)"),
+};
 
 export function registerTools(server: McpServer) {
   // Registra a tool com log em integration_logs e erro padronizado.
@@ -86,28 +111,32 @@ export function registerTools(server: McpServer) {
     inputSchema: {},
   }, async () => {
     const counts = await queryOne(
-      `select (select count(*) from videos)::int as videos,
+      `select (select count(*) from videos where competitor_id is null and hashtag is null)::int as videos_augusto,
+              (select count(*) from videos where competitor_id is not null)::int as videos_concorrentes,
+              (select count(*) from competitors)::int as concorrentes,
               (select count(*) from analyses)::int as analyses,
               (select count(*) from analyses where rules_fit is null or rules_fit = '')::int as analyses_sem_adequacao,
               (select count(*) from scripts)::int as scripts,
               (select count(*) from files)::int as files,
-              (select max(metrics_updated_at) from videos) as metricas_atualizadas_em`
+              (select count(*) from file_sections)::int as file_sections,
+              (select max(metrics_updated_at) from videos where competitor_id is null) as metricas_atualizadas_em`
     );
     return { guide: MCP_INSTRUCTIONS, tools: renderToolList(), counts, file_categories: FILE_CATEGORIES };
   });
 
-  // ---------------------------------------------------- vídeos e métricas
-  tool<{ sort_by?: string; limit?: number }>("list_videos", {
+  // ---------------------------------------------------- posts e métricas
+  tool<{ scope?: "own" | "competitor" | "hashtag" | "all"; competitor_id?: string; hashtag?: string; sort_by?: string; limit?: number }>("list_videos", {
     title: "Listar vídeos com métricas",
     description:
-      "Lista os vídeos com todas as métricas da Meta (colunas principais + campo metrics) e o status da última análise do Gemini. " +
-      "sort_by aceita: recent (padrão) ou qualquer métrica (views, reach, likes, comments, shares, saved, reposts, ig_reels_avg_watch_time, reels_skip_rate...).",
+      "Lista vídeos com todas as métricas (colunas + campo metrics), status da última análise e categorias. Padrão: vídeos do Augusto. " +
+      "sort_by: recent (padrão) ou qualquer métrica (views, reach, likes, comments, shares, saved, reposts, ig_reels_avg_watch_time, reels_skip_rate...).",
     inputSchema: {
+      ...scopeSchema,
       sort_by: z.string().optional().describe("recent ou o nome de uma métrica"),
       limit: z.number().int().positive().optional().describe("Máximo de vídeos (padrão: todos)"),
     },
-  }, async ({ sort_by, limit }) => {
-    let videos = await listVideos();
+  }, async ({ scope, competitor_id, hashtag, sort_by, limit }) => {
+    let videos = await listVideos({ scope, competitorId: competitor_id, hashtag });
     if (sort_by && sort_by !== "recent") {
       const value = (v: VideoRow) =>
         v.metrics?.[sort_by] ?? (v as unknown as Record<string, number>)[sort_by === "saved" ? "saves" : sort_by] ?? -1;
@@ -116,9 +145,35 @@ export function registerTools(server: McpServer) {
     return { total: videos.length, videos: videos.slice(0, limit ?? videos.length).map(slimVideo) };
   });
 
+  tool<{ scope?: "own" | "competitor" | "hashtag"; competitor_id?: string; hashtag?: string; period?: "30d" | "last_month" | "quarter" | "semester"; metric?: "views" | "saves" | "shares" | "comments" | "likes" | "engagement"; top?: number }>("get_best_posts", {
+    title: "Melhores posts do período",
+    description: "O mesmo recorte da aba 'Melhores posts': posts publicados no período, ordenados pela métrica. Avisa se o período pode estar incompleto.",
+    inputSchema: { ...scopeSchema, ...bestSchema },
+  }, async ({ scope, competitor_id, hashtag, period, metric, top }) => {
+    const r = await selectPosts({ scope, competitorId: competitor_id, hashtag, mode: "best", period, metric, top });
+    return { label: r.label, incomplete: r.incomplete, total: r.videos.length, videos: r.videos.map(slimVideo) };
+  });
+
+  tool<{ scope?: "own" | "competitor" | "hashtag"; competitor_id?: string; hashtag?: string; mode?: "all" | "best"; period?: "30d" | "last_month" | "quarter" | "semester"; metric?: "views" | "saves" | "shares" | "comments" | "likes" | "engagement"; top?: number; include_transcripts?: boolean }>("get_posts_report", {
+    title: "Relatório de posts",
+    description: "Relatório em Markdown (o mesmo do botão 'Gerar relatório de todos'): tabela de métricas + resumo, gancho, estrutura, categorias e adequação de cada post. mode=all (todos) ou best (melhores do período).",
+    inputSchema: {
+      ...scopeSchema,
+      mode: z.enum(["all", "best"]).optional(),
+      ...bestSchema,
+      include_transcripts: z.boolean().optional().describe("Incluir as transcrições completas (fica bem maior)"),
+    },
+  }, async (o) => {
+    const r = await buildReport({
+      scope: o.scope, competitorId: o.competitor_id, hashtag: o.hashtag, mode: o.mode, period: o.period, metric: o.metric, top: o.top,
+      includeTranscripts: o.include_transcripts,
+    });
+    return r.markdown;
+  });
+
   tool<{ video_id: string }>("get_video", {
     title: "Detalhar vídeo",
-    description: "Um vídeo com todas as métricas e o histórico completo de análises (resumo, transcrição, adequação às regras, prompt e modelo usados).",
+    description: "Um vídeo com todas as métricas e o histórico completo de análises (resumo, transcrição, estrutura, gancho, categorias, adequação, prompt e modelo).",
     inputSchema: { video_id: z.string().describe("UUID do vídeo") },
   }, async ({ video_id }) => {
     const video = await getVideo(video_id);
@@ -128,9 +183,9 @@ export function registerTools(server: McpServer) {
   });
 
   tool<{ limit?: number }>("sync_videos_from_meta", {
-    title: "Sincronizar vídeos com a Meta",
+    title: "Sincronizar vídeos do Augusto",
     description: "Busca os posts mais recentes do Instagram @augustotita e cria/atualiza os vídeos com todas as métricas. Não dispara análises.",
-    inputSchema: { limit: z.number().int().min(1).max(500).optional().describe("Quantos posts recentes buscar (padrão 25)") },
+    inputSchema: { limit: z.number().int().min(1).max(500).optional().describe("Quantos posts recentes buscar (padrão 25; semestre ≈ 200+)") },
   }, async ({ limit }) => ({ synced: await syncVideosFromMeta(limit ?? 25) }));
 
   tool<{ video_url: string; caption?: string; thumbnail_url?: string; permalink?: string; posted_at?: string }>("add_video", {
@@ -157,16 +212,15 @@ export function registerTools(server: McpServer) {
   // ------------------------------------------------------------ análises
   tool("get_default_prompt", {
     title: "Prompt padrão do Gemini",
-    description: "Mostra o prompt padrão enviado ao Gemini junto com o vídeo e o modelo em uso.",
+    description: "Mostra o prompt padrão enviado ao Gemini junto com o vídeo e o modelo em uso. A lista de categorias existentes é acrescentada ao fim automaticamente.",
     inputSchema: {},
   }, async () => ({ default_prompt: DEFAULT_ANALYSIS_PROMPT, model: process.env.GEMINI_MODEL || "gemini-2.5-pro" }));
 
   tool<{ video_id: string; prompt?: string }>("request_video_analysis", {
     title: "Analisar vídeo com o Gemini",
     description:
-      "Envia o vídeo ao Gemini. Sem prompt, usa o padrão (resumo + transcrição). Com prompt, o Gemini segue o seu pedido, mas a resposta sempre volta " +
-      "nos campos summary e transcript. O prompt fica gravado na análise. Roda em background (~30-60s): acompanhe com get_analysis. " +
-      "Consome a API do Gemini: só dispare quando o usuário pedir.",
+      "Envia o vídeo (do Augusto, de concorrente ou de hashtag) ao Gemini. Sem prompt, usa o padrão. A resposta sempre volta em summary, transcript, " +
+      "structure, hook e categories. Roda em background (~30-60s): acompanhe com get_analysis. Consome a API do Gemini: só dispare quando o usuário pedir.",
     inputSchema: {
       video_id: z.string().describe("UUID do vídeo"),
       prompt: z.string().optional().describe("Prompt personalizado (opcional)"),
@@ -179,7 +233,7 @@ export function registerTools(server: McpServer) {
   tool<{ video_id?: string; analysis_id?: string }>("get_analysis", {
     title: "Ver análise",
     description:
-      "Status (pending|processing|done|error) e conteúdo completo de uma análise: summary, transcript, rules_fit (adequação às regras do Augusto), " +
+      "Status (pending|processing|done|error) e conteúdo completo de uma análise: summary, transcript, structure, hook, categories, rules_fit (adequação às regras do Augusto), " +
       "prompt e model. Passe analysis_id, ou video_id para a mais recente do vídeo.",
     inputSchema: {
       video_id: z.string().optional().describe("UUID do vídeo (traz a análise mais recente)"),
@@ -197,10 +251,10 @@ export function registerTools(server: McpServer) {
     return { analysis: slimAnalysis(analysis) };
   });
 
-  tool<{ analysis_id?: string; video_id?: string; summary?: string; transcript?: string; rules_fit?: string }>("save_analysis_fields", {
+  tool<{ analysis_id?: string; video_id?: string; summary?: string; transcript?: string; structure?: string; hook?: string; categories?: string[]; rules_fit?: string }>("save_analysis_fields", {
     title: "Preencher campos da análise",
     description:
-      "Preenche ou edita os campos de uma análise: summary (resumo), transcript (transcrição) e rules_fit (adequação às regras do Augusto). " +
+      "Preenche ou edita os campos de uma análise: summary, transcript, structure, hook, categories e rules_fit (adequação às regras do Augusto). " +
       "Com analysis_id edita aquela análise. Só com video_id edita a mais recente do vídeo, ou cria uma nova (feita pelo Claude) se ele não tiver nenhuma. " +
       "Campos omitidos não mudam.",
     inputSchema: {
@@ -208,9 +262,12 @@ export function registerTools(server: McpServer) {
       video_id: z.string().optional(),
       summary: z.string().optional(),
       transcript: z.string().optional(),
+      structure: z.string().optional(),
+      hook: z.string().optional(),
+      categories: z.array(z.string()).optional(),
       rules_fit: z.string().optional().describe("Adequação às regras do Augusto"),
     },
-  }, async ({ analysis_id, video_id, summary, transcript, rules_fit }) => {
+  }, async ({ analysis_id, video_id, ...fields }) => {
     let targetId = analysis_id ?? (video_id ? (await getLatestAnalysis(video_id))?.id : undefined);
     if (!targetId) {
       if (!video_id) throw new Error("Passe analysis_id ou video_id.");
@@ -223,27 +280,75 @@ export function registerTools(server: McpServer) {
       );
       targetId = created!.id;
     }
-    const analysis = await updateAnalysis(targetId, { summary, transcript, rules_fit });
+    const analysis = await updateAnalysis(targetId, fields);
     if (!analysis) throw new Error(`Análise ${targetId} não encontrada.`);
     return { analysis: slimAnalysis(analysis) };
   });
 
+  // ----------------------------------------------------------- categorias
+  tool("list_categories", {
+    title: "Listar categorias",
+    description: "Categorias geradas pelo Gemini com os vídeos de cada uma (id, legenda, origem, views, curtidas) e se estão na seleção.",
+    inputSchema: {},
+  }, async () => {
+    const groups = await listCategories();
+    return groups.map((g) => ({
+      category: g.name,
+      total: g.videos.length,
+      selected: g.enabled_count,
+      videos: g.videos.map(({ video: v, enabled }) => ({
+        video_id: v.id,
+        enabled,
+        caption: (v.caption ?? "").split("\n")[0].slice(0, 100),
+        origin: v.source === "competitor" ? `@${v.competitor_username}` : v.source === "hashtag" ? `#${v.hashtag}` : "@augustotita",
+        views: v.views,
+        likes: v.likes,
+        saves: v.saves,
+        posted_at: v.posted_at,
+      })),
+    }));
+  });
+
+  tool<{ category: string; video_id: string; enabled: boolean }>("set_category_video", {
+    title: "Ligar/desligar vídeo da categoria",
+    description: "Tira (enabled=false) ou volta (enabled=true) um vídeo da seleção da categoria. Desligados não entram nos roteiros copiados nem no roteiro novo.",
+    inputSchema: { category: z.string(), video_id: z.string(), enabled: z.boolean() },
+  }, async ({ category, video_id, enabled }) => {
+    await setCategorySelection(category, video_id, enabled);
+    return { ok: true };
+  });
+
+  tool<{ category: string }>("get_category_scripts", {
+    title: "Roteiros da categoria",
+    description: "Markdown com os roteiros dos vídeos ligados da categoria: métricas, gancho, estrutura e transcrição de cada um (o mesmo do botão copiar/baixar).",
+    inputSchema: { category: z.string() },
+  }, async ({ category }) => (await compileCategoryScripts(category)).markdown);
+
+  tool<{ category: string; instructions?: string }>("generate_category_script", {
+    title: "Gerar roteiro novo da categoria",
+    description:
+      "Pede ao Gemini (texto) um roteiro novo da categoria com base nos vídeos ligados, seguindo o método e a estrutura do Augusto da biblioteca. " +
+      "instructions substitui as instruções padrão (os vídeos de referência são sempre anexados). Salva em Roteiros com source 'gemini'. Consome a API do Gemini.",
+    inputSchema: { category: z.string(), instructions: z.string().optional() },
+  }, async ({ category, instructions }) => ({ script: await generateCategoryScript(category, instructions, `claude_code:${getActor()}`) }));
+
   // ------------------------------------------------------------ roteiros
   tool("list_scripts", {
     title: "Listar roteiros",
-    description: "Roteiros salvos: título, roteiro completo, gancho, estrutura, status e vínculo com vídeo.",
+    description: "Roteiros salvos: título, roteiro completo, gancho, estrutura, categoria, origem (manual, claude_code, gemini), status e vínculo com vídeo.",
     inputSchema: {},
   }, async () => ({ scripts: await listScripts() }));
 
-  tool<{ title?: string; full_script: string; hook: string; structure: string; video_id?: string; status?: "draft" | "ready" | "published" | "archived" }>("save_script", {
+  tool<{ title?: string; full_script: string; hook: string; structure: string; video_id?: string; category?: string; status?: "draft" | "ready" | "published" | "archived" }>("save_script", {
     title: "Salvar roteiro",
-    description: "Cria um roteiro: roteiro completo, gancho (primeiros 3 segundos) e estrutura narrativa. Pode ser ligado a um vídeo (video_id).",
+    description: "Cria um roteiro: roteiro completo, gancho (primeiros 3 segundos) e estrutura narrativa. Pode ser ligado a um vídeo (video_id) e a uma categoria.",
     inputSchema: {
       title: z.string().optional().describe("Título curto do roteiro"),
       full_script: z.string().describe("Roteiro completo, por extenso"),
       hook: z.string().describe("Gancho — o que acontece nos primeiros 3 segundos"),
-      structure: z.string().describe("Estrutura (abertura, desenvolvimento, fechamento etc.)"),
+      structure: z.string().describe("Estrutura (partes com os segundos)"),
       video_id: z.string().optional().describe("UUID de um vídeo existente para vincular"),
+      category: z.string().optional(),
       status: z.enum(["draft", "ready", "published", "archived"]).optional(),
     },
   }, async (input) => {
@@ -273,35 +378,113 @@ export function registerTools(server: McpServer) {
     return { script };
   });
 
+  tool<{ script_ids: string[] }>("delete_scripts", {
+    title: "Excluir roteiros",
+    description: "Exclui um ou vários roteiros pelo id. Não dá para desfazer: confirme com o usuário.",
+    inputSchema: { script_ids: z.array(z.string()).min(1) },
+  }, async ({ script_ids }) => ({ deleted: await deleteScripts(script_ids) }));
+
+  // ---------------------------------------------------------- concorrência
+  tool("list_competitors", {
+    title: "Listar concorrentes",
+    description: "Concorrentes com seguidores e médias de views/curtidas/comentários dos últimos 30 vídeos, e as médias do Augusto para comparar.",
+    inputSchema: {},
+  }, async () => ({ competitors: await listCompetitors(), augusto: await getOwnStats() }));
+
+  tool<{ input: string }>("add_competitors", {
+    title: "Adicionar concorrentes",
+    description: "Adiciona concorrentes a partir de links do Instagram ou @usuarios (vários separados por espaço, vírgula ou linha). Só contas profissionais. Puxa os últimos 50 vídeos de cada.",
+    inputSchema: { input: z.string() },
+  }, async ({ input }) => ({ results: await addCompetitors(input) }));
+
+  tool<{ competitor_id: string; limit?: number }>("sync_competitor", {
+    title: "Atualizar concorrente",
+    description: "Atualiza o perfil e os vídeos de um concorrente (views, curtidas, comentários).",
+    inputSchema: { competitor_id: z.string(), limit: z.number().int().min(1).max(300).optional().describe("Quantos posts recentes (padrão 50)") },
+  }, async ({ competitor_id, limit }) => syncCompetitor(competitor_id, limit ?? 50));
+
+  tool<{ competitor_id: string }>("remove_competitor", {
+    title: "Remover concorrente",
+    description: "Remove o concorrente e todos os vídeos e análises dele. Confirme com o usuário.",
+    inputSchema: { competitor_id: z.string() },
+  }, async ({ competitor_id }) => ({ deleted: await removeCompetitor(competitor_id) }));
+
+  tool<{ hashtag: string; edge?: "top_media" | "recent_media" }>("search_hashtag", {
+    title: "Buscar hashtag",
+    description:
+      "Busca os posts de uma hashtag (top_media = em alta, recent_media = últimas 24h) e salva como vídeos de scope=hashtag. " +
+      "Limite da Meta: 30 hashtags DIFERENTES a cada 7 dias; repetir uma já buscada não gasta. Confira a cota antes com list_hashtag_searches.",
+    inputSchema: { hashtag: z.string(), edge: z.enum(["top_media", "recent_media"]).optional() },
+  }, async ({ hashtag, edge }) => searchHashtag(hashtag, edge ?? "top_media"));
+
+  tool("list_hashtag_searches", {
+    title: "Hashtags buscadas",
+    description: "Hashtags já buscadas (com quantos posts salvos) e a cota da semana.",
+    inputSchema: {},
+  }, async () => ({ history: await listHashtagSearches(), quota: await getHashtagQuota() }));
+
   // ---------------------------------------------------------- biblioteca
   tool<{ category?: string; search?: string }>("list_files", {
     title: "Listar arquivos da biblioteca",
     description:
-      "Arquivos da biblioteca (roteiros antigos, transcrições de aula...), sem o texto completo (use get_file). " +
-      "search procura no nome, na descrição e no texto. Categorias: roteiro_antigo, transcricao_aula, outro.",
+      "Arquivos da biblioteca, sem o texto (use list_file_sections/get_file_section). search procura no nome, na descrição e no texto. " +
+      "Categorias: roteiro_antigo, transcricao_aula, metodo_roteiro, briefing, referencia_cientifica, imagem, outro.",
     inputSchema: {
       category: z.string().optional(),
       search: z.string().optional().describe("Palavra ou trecho para buscar"),
     },
   }, async (opts) => ({ files: await listFiles(opts) }));
 
-  tool<{ file_id: string }>("get_file", {
-    title: "Ler arquivo",
-    description: "Um arquivo da biblioteca com o texto completo extraído (text_content) e o link do original (blob_url).",
+  tool<{ file_id: string }>("list_file_sections", {
+    title: "Títulos de um arquivo",
+    description: "Lista as seções (títulos) de um arquivo na ordem, com nível (1 = tema, 2 = passagem/subtítulo) e tamanho. Use get_file_section para ler uma.",
     inputSchema: { file_id: z.string() },
-  }, async ({ file_id }) => {
+  }, async ({ file_id }) => ({ sections: await listSections(file_id) }));
+
+  tool<{ section_id: string }>("get_file_section", {
+    title: "Ler seção",
+    description: "O conteúdo completo de uma seção de arquivo da biblioteca.",
+    inputSchema: { section_id: z.string() },
+  }, async ({ section_id }) => {
+    const section = await getSection(section_id);
+    if (!section) throw new Error(`Seção ${section_id} não encontrada.`);
+    return { section };
+  });
+
+  tool<{ query: string; limit?: number }>("search_library", {
+    title: "Buscar na biblioteca",
+    description: "Procura um termo em todas as seções de todos os arquivos. Devolve arquivo, título da seção, section_id e um trecho em volta do termo.",
+    inputSchema: { query: z.string(), limit: z.number().int().min(1).max(100).optional().describe("Máximo de resultados (padrão 30)") },
+  }, async ({ query: term, limit }) => ({ results: await searchLibrary(term, limit ?? 30) }));
+
+  tool<{ file_id: string; max_chars?: number; offset?: number }>("get_file", {
+    title: "Ler arquivo",
+    description: "Um arquivo da biblioteca com o texto extraído, em partes: max_chars (padrão 30000) a partir de offset. Para arquivos grandes prefira as seções.",
+    inputSchema: {
+      file_id: z.string(),
+      max_chars: z.number().int().min(1000).max(200000).optional(),
+      offset: z.number().int().min(0).optional(),
+    },
+  }, async ({ file_id, max_chars, offset }) => {
     const file = await getFile(file_id);
     if (!file) throw new Error(`Arquivo ${file_id} não encontrado.`);
-    return { file };
+    const text = file.text_content ?? "";
+    const start = offset ?? 0;
+    const end = start + (max_chars ?? 30000);
+    return {
+      file: { ...file, text_content: text.slice(start, end) },
+      text_length: text.length,
+      next_offset: end < text.length ? end : null,
+    };
   });
 
   tool<{ name: string; text: string; category?: string; description?: string }>("save_text_file", {
     title: "Salvar texto na biblioteca",
-    description: "Cria um arquivo de texto na biblioteca (ex.: uma transcrição, um roteiro de referência, as regras do Augusto).",
+    description: "Cria um arquivo de texto na biblioteca (ex.: roteiros antigos melhorados, as regras do Augusto). Ele já é dividido em títulos.",
     inputSchema: {
       name: z.string().describe("Nome do arquivo"),
-      text: z.string().describe("Conteúdo"),
-      category: z.string().optional().describe("roteiro_antigo | transcricao_aula | outro (ou outra livre)"),
+      text: z.string().describe("Conteúdo (use # títulos em Markdown para organizar)"),
+      category: z.string().optional().describe("roteiro_antigo | transcricao_aula | metodo_roteiro | briefing | referencia_cientifica | outro"),
       description: z.string().optional(),
     },
   }, async (input) => ({
@@ -310,7 +493,7 @@ export function registerTools(server: McpServer) {
 
   tool<{ file_id: string; name?: string; category?: string; description?: string; text_content?: string }>("update_file", {
     title: "Editar arquivo",
-    description: "Edita nome, categoria, descrição ou o texto (text_content) de um arquivo. Campos omitidos não mudam.",
+    description: "Edita nome, categoria, descrição ou o texto (text_content) de um arquivo. Mudar o texto refaz os títulos. Campos omitidos não mudam.",
     inputSchema: {
       file_id: z.string(),
       name: z.string().optional(),
@@ -321,7 +504,7 @@ export function registerTools(server: McpServer) {
   }, async ({ file_id, ...input }) => {
     const file = await updateFile(file_id, input);
     if (!file) throw new Error(`Arquivo ${file_id} não encontrado.`);
-    return { file };
+    return { file: { ...file, text_content: undefined } };
   });
 
   tool<{ file_id: string }>("delete_file", {
@@ -373,7 +556,7 @@ export function registerTools(server: McpServer) {
     title: "Chamar a Graph API da Meta",
     description:
       "Chamada livre à Graph API com o token da Página do Augusto. Libera tudo o que as permissões do app permitem: comentários " +
-      "(GET {media_id}/comments, POST {comment_id}/replies), público, stories, marcações, hashtags, business discovery de concorrentes, publicação " +
+      "(GET {media_id}/comments, POST {comment_id}/replies), público, stories, marcações, hashtags, business discovery, publicação " +
       "(POST {ig_user_id}/media + media_publish), anúncios. path sem a versão, ex.: '{ig_user_id}/stories'. " +
       "ATENÇÃO: POST e DELETE agem na conta real — confirme com o usuário antes.",
     inputSchema: {

@@ -146,6 +146,87 @@ create table if not exists integration_logs (
 
 create index if not exists idx_integration_logs_created_at on integration_logs (created_at desc);
 
+-- ============================================================
+-- v3: estrutura/gancho/categorias do Gemini, concorrentes, hashtags,
+-- categorias com seleção, seções da biblioteca e exclusão de roteiros.
+-- ============================================================
+
+-- Campos que o Gemini gera junto com resumo e transcrição.
+alter table analyses add column if not exists structure  text;    -- estrutura narrativa por parte/segundo
+alter table analyses add column if not exists hook       text;    -- gancho: os primeiros segundos
+alter table analyses add column if not exists categories text[];  -- temas do vídeo
+create index if not exists idx_analyses_categories on analyses using gin (categories);
+
+-- Contas concorrentes (só contas profissionais: a Meta não expõe contas pessoais).
+create table if not exists competitors (
+  id                  uuid primary key default gen_random_uuid(),
+  username            text not null unique,
+  name                text,
+  biography           text,
+  website             text,
+  followers_count     bigint,
+  follows_count       bigint,
+  media_count         bigint,
+  profile_picture_url text,
+  notes               text,
+  last_synced_at      timestamptz,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+
+-- Posts de concorrentes e de hashtags ficam em `videos`, para reaproveitar
+-- análise, categorias e roteiros. Os do Augusto têm competitor_id e hashtag nulos.
+alter table videos add column if not exists competitor_id uuid references competitors(id) on delete cascade;
+alter table videos add column if not exists hashtag       text;
+alter table videos drop constraint if exists videos_source_check;
+alter table videos add constraint videos_source_check
+  check (source in ('meta', 'manual', 'claude_code', 'competitor', 'hashtag'));
+create index if not exists idx_videos_competitor on videos (competitor_id);
+create index if not exists idx_videos_hashtag on videos (hashtag);
+
+-- Histórico de buscas de hashtag: a Meta limita a 30 hashtags diferentes por 7 dias.
+create table if not exists hashtag_searches (
+  id             uuid primary key default gen_random_uuid(),
+  hashtag        text not null,
+  ig_hashtag_id  text,
+  edge           text not null default 'top_media',   -- 'top_media' (em alta) | 'recent_media' (recentes)
+  result_count   int,
+  searched_at    timestamptz not null default now()
+);
+create index if not exists idx_hashtag_searches_at on hashtag_searches (searched_at desc);
+
+-- Roteiros gerados pelo Gemini a partir de uma categoria.
+alter table scripts add column if not exists category          text;
+alter table scripts add column if not exists generation_prompt text;
+alter table scripts drop constraint if exists scripts_source_check;
+alter table scripts add constraint scripts_source_check
+  check (source in ('manual', 'claude_code', 'gemini'));
+
+-- Vídeos desligados da seleção de uma categoria (não entram no copiar/baixar/gerar).
+create table if not exists category_selection (
+  category    text not null,
+  video_id    uuid not null references videos(id) on delete cascade,
+  enabled     boolean not null default true,
+  updated_at  timestamptz not null default now(),
+  primary key (category, video_id)
+);
+
+-- Biblioteca: caminho de origem (importação da pasta "arquivos base") e
+-- o texto dividido por títulos, para o Claude pedir uma parte específica.
+alter table files add column if not exists source_path text;
+create unique index if not exists idx_files_source_path on files (source_path) where source_path is not null;
+
+create table if not exists file_sections (
+  id          uuid primary key default gen_random_uuid(),
+  file_id     uuid not null references files(id) on delete cascade,
+  position    int not null,
+  level       int not null default 1,
+  title       text not null,
+  content     text not null,
+  char_count  int not null default 0
+);
+create index if not exists idx_file_sections_file on file_sections (file_id, position);
+
 -- trigger simples para manter updated_at em dia
 create or replace function set_updated_at() returns trigger as $$
 begin
@@ -168,4 +249,8 @@ create trigger trg_analyses_updated_at before update on analyses
 
 drop trigger if exists trg_files_updated_at on files;
 create trigger trg_files_updated_at before update on files
+  for each row execute procedure set_updated_at();
+
+drop trigger if exists trg_competitors_updated_at on competitors;
+create trigger trg_competitors_updated_at before update on competitors
   for each row execute procedure set_updated_at();

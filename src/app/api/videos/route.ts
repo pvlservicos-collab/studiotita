@@ -4,10 +4,17 @@ import { apiErrorResponse } from "@/lib/apiError";
 
 // Sincronizar 100+ posts com as métricas de cada um leva mais que o padrão.
 export const maxDuration = 300;
+export const dynamic = "force-dynamic";
 
-export async function GET() {
+/** ?scope=own (padrão) | competitor&competitor_id= | hashtag&tag= | all */
+export async function GET(req: NextRequest) {
   try {
-    const videos = await listVideos();
+    const sp = new URL(req.url).searchParams;
+    const videos = await listVideos({
+      scope: (sp.get("scope") as "own" | "competitor" | "hashtag" | "all") || "own",
+      competitorId: sp.get("competitor_id") || undefined,
+      hashtag: sp.get("tag") || undefined,
+    });
     return NextResponse.json({ videos });
   } catch (err) {
     return apiErrorResponse(err);

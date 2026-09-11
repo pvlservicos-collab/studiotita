@@ -3,14 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { upload } from "@vercel/blob/client";
 import { GlassCard, Badge, EmptyState, ProgressBar } from "@/components/ui";
+import { FILE_CATEGORIES, fileCategoryLabel } from "@/lib/fileCategories";
 import type { FileRow } from "@/lib/types";
 
-const CATEGORIES = [
-  { id: "roteiro_antigo", label: "Roteiro antigo" },
-  { id: "transcricao_aula", label: "Transcrição de aula" },
-  { id: "outro", label: "Outro" },
-];
-const categoryLabel = (id: string) => CATEGORIES.find((c) => c.id === id)?.label ?? id;
+const CATEGORIES = FILE_CATEGORIES;
+const categoryLabel = fileCategoryLabel;
 
 function formatSize(bytes: number | null) {
   if (!bytes) return "—";
@@ -192,7 +189,7 @@ export default function FileLibrary() {
 
       {/* filtros */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1 rounded-full bg-white/60 p-1">
+        <div className="flex flex-wrap gap-1 rounded-2xl bg-white/60 p-1">
           {[{ id: "", label: "Todos" }, ...CATEGORIES].map((c) => (
             <button
               key={c.id}
@@ -238,7 +235,9 @@ export default function FileLibrary() {
               {f.description && <p className="line-clamp-2 text-xs text-ink-600">{f.description}</p>}
               <div className="mt-auto flex items-center justify-between pt-1 text-xs">
                 <span className={f.text_length ? "text-ink-500" : "text-amber-600"}>
-                  {f.text_length ? `${new Intl.NumberFormat("pt-BR").format(f.text_length)} caracteres de texto` : "sem texto extraído"}
+                  {f.text_length
+                    ? `${new Intl.NumberFormat("pt-BR").format(f.text_length)} caracteres · ${new Intl.NumberFormat("pt-BR").format(f.section_count ?? 0)} títulos`
+                    : "sem texto extraído"}
                 </span>
                 <button onClick={() => setOpenId(f.id)} className="font-medium text-gold-700 hover:underline">
                   Abrir
@@ -325,6 +324,82 @@ function PasteTextForm({ onCreated }: { onCreated: () => void }) {
         </button>
       </div>
     </GlassCard>
+  );
+}
+
+type SectionItem = { id: string; position: number; level: number; title: string; char_count: number };
+
+/** Navegação pelos títulos do arquivo: lista à esquerda, conteúdo da seção à direita. */
+function SectionsViewer({ fileId, preview }: { fileId: string; preview: string | null }) {
+  const [sections, setSections] = useState<SectionItem[] | null>(null);
+  const [filter, setFilter] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [content, setContent] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/files/${fileId}/sections`)
+      .then((r) => r.json())
+      .then((d) => {
+        setSections(d.sections ?? []);
+        if (d.sections?.[0]) setSelected(d.sections[0].id);
+      });
+  }, [fileId]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setContent(null);
+    fetch(`/api/files/${fileId}/sections?section=${selected}`)
+      .then((r) => r.json())
+      .then((d) => setContent(d.section?.content ?? ""));
+  }, [fileId, selected]);
+
+  if (sections === null) return <p className="text-sm text-ink-400">Carregando títulos...</p>;
+  if (sections.length === 0) {
+    return (
+      <pre className="scrollbar-thin max-h-[55vh] overflow-auto whitespace-pre-wrap rounded-xl bg-ink-50 p-4 text-xs leading-relaxed text-ink-700">
+        {preview || "Nenhum texto extraído deste arquivo."}
+      </pre>
+    );
+  }
+
+  const term = filter.trim().toLowerCase();
+  const visible = term ? sections.filter((s) => s.title.toLowerCase().includes(term)) : sections;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-500">
+        <span>
+          {sections.length} títulos · organizado automaticamente (o Claude pede cada parte pelo título)
+        </span>
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filtrar títulos..."
+          className="rounded-lg border border-ink-200 px-2 py-1 text-xs outline-none focus:border-gold-400"
+        />
+      </div>
+      <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <ul className="scrollbar-thin max-h-[50vh] overflow-auto rounded-xl border border-ink-100 bg-white p-1">
+          {visible.slice(0, 1500).map((s) => (
+            <li key={s.id}>
+              <button
+                onClick={() => setSelected(s.id)}
+                className={`w-full rounded-lg px-2 py-1 text-left text-xs leading-snug ${
+                  selected === s.id ? "bg-gold-100 text-gold-800" : "text-ink-700 hover:bg-ink-50"
+                } ${s.level === 1 ? "font-semibold" : ""}`}
+                style={{ paddingLeft: `${(s.level - 1) * 12 + 8}px` }}
+              >
+                {s.title}
+              </button>
+            </li>
+          ))}
+          {visible.length > 1500 && <li className="px-2 py-1 text-xs text-ink-400">+{visible.length - 1500} títulos: use o filtro</li>}
+        </ul>
+        <pre className="scrollbar-thin max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-xl bg-ink-50 p-4 text-xs leading-relaxed text-ink-700">
+          {content ?? "Carregando..."}
+        </pre>
+      </div>
+    </div>
   );
 }
 
@@ -432,12 +507,12 @@ function FileModal({
                   {saving ? "Salvando..." : "Salvar"}
                 </button>
               </div>
-              <div>
-                <div className="mb-1 text-xs font-medium text-ink-500">Texto extraído (o que o Claude lê)</div>
-                <pre className="scrollbar-thin max-h-[55vh] overflow-auto whitespace-pre-wrap rounded-xl bg-ink-50 p-4 text-xs leading-relaxed text-ink-700">
-                  {file.text_content || "Nenhum texto extraído deste arquivo."}
-                </pre>
-              </div>
+              {file.content_type?.startsWith("image/") && file.blob_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={file.blob_url} alt={file.name} className="max-h-[60vh] w-full rounded-xl object-contain" />
+              ) : (
+                <SectionsViewer fileId={file.id} preview={file.text_content ?? null} />
+              )}
             </div>
           </>
         )}

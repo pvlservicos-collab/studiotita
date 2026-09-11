@@ -2,43 +2,65 @@ import { query, queryOne } from "@/lib/db";
 import type { VideoRow } from "@/lib/types";
 import { fetchRecentMedia, fetchMediaInsights } from "@/lib/meta";
 
-const LIST_QUERY = `
+const SELECT_VIDEOS = `
   select v.*,
-         la.id      as latest_analysis_id,
-         la.status  as latest_analysis_status,
-         la.summary as latest_analysis_summary
+         c.username   as competitor_username,
+         la.id        as latest_analysis_id,
+         la.status    as latest_analysis_status,
+         la.summary   as latest_analysis_summary,
+         ld.categories as latest_analysis_categories
   from videos v
+  left join competitors c on c.id = v.competitor_id
   left join lateral (
-    select id, status, summary
-    from analyses a
-    where a.video_id = v.id
-    order by a.requested_at desc
-    limit 1
+    select id, status, summary from analyses a
+    where a.video_id = v.id order by a.requested_at desc limit 1
   ) la on true
-  order by coalesce(v.posted_at, v.created_at) desc
-`;
+  left join lateral (
+    select categories from analyses a
+    where a.video_id = v.id and a.status = 'done' order by a.requested_at desc limit 1
+  ) ld on true`;
 
-export async function listVideos(): Promise<VideoRow[]> {
-  return query<VideoRow>(LIST_QUERY);
+export interface VideoFilter {
+  /** own = Augusto (padrão); competitor = de um concorrente; hashtag = de uma hashtag; all = tudo */
+  scope?: "own" | "competitor" | "hashtag" | "all";
+  competitorId?: string;
+  hashtag?: string;
+}
+
+export async function listVideos(filter: VideoFilter = {}): Promise<VideoRow[]> {
+  const where: string[] = [];
+  const params: unknown[] = [];
+  const scope = filter.scope ?? "own";
+  if (scope === "own") where.push(`v.competitor_id is null and v.source in ('meta', 'manual', 'claude_code')`);
+  if (scope === "competitor") {
+    where.push(`v.source = 'competitor'`);
+    if (filter.competitorId) {
+      params.push(filter.competitorId);
+      where.push(`v.competitor_id = $${params.length}`);
+    }
+  }
+  if (scope === "hashtag") {
+    where.push(`v.hashtag is not null`);
+    if (filter.hashtag) {
+      params.push(filter.hashtag);
+      where.push(`v.hashtag = $${params.length}`);
+    }
+  }
+  return query<VideoRow>(
+    `${SELECT_VIDEOS} ${where.length ? `where ${where.join(" and ")}` : ""}
+     order by coalesce(v.posted_at, v.created_at) desc`,
+    params
+  );
 }
 
 export async function getVideo(id: string): Promise<VideoRow | null> {
-  return queryOne<VideoRow>(
-    `select v.*,
-            la.id      as latest_analysis_id,
-            la.status  as latest_analysis_status,
-            la.summary as latest_analysis_summary
-     from videos v
-     left join lateral (
-       select id, status, summary
-       from analyses a
-       where a.video_id = v.id
-       order by a.requested_at desc
-       limit 1
-     ) la on true
-     where v.id = $1`,
-    [id]
-  );
+  return queryOne<VideoRow>(`${SELECT_VIDEOS} where v.id = $1`, [id]);
+}
+
+/** Cópia própria do arquivo (quando a Meta não libera o vídeo de outra conta). */
+export async function setVideoBlob(id: string, blobUrl: string): Promise<VideoRow | null> {
+  await query(`update videos set blob_url = $2 where id = $1`, [id, blobUrl]);
+  return getVideo(id);
 }
 
 export interface CreateVideoInput {

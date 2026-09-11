@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requestAnalysis, updateAnalysis } from "@/lib/services/analyses";
+import { categoriesHint, requestAnalysis, updateAnalysis } from "@/lib/services/analyses";
 import { DEFAULT_ANALYSIS_PROMPT } from "@/lib/gemini";
 import { apiErrorResponse } from "@/lib/apiError";
 
@@ -7,12 +7,19 @@ import { apiErrorResponse } from "@/lib/apiError";
 // vídeo + Gemini cabem nesse limite.
 export const maxDuration = 300;
 
-/** Prompt padrão e modelo, para o painel mostrar antes de enviar. */
+export const dynamic = "force-dynamic";
+
+/** Prompt padrão, modelo e o trecho de categorias que é acrescentado ao fim do prompt. */
 export async function GET() {
-  return NextResponse.json({
-    default_prompt: DEFAULT_ANALYSIS_PROMPT,
-    model: process.env.GEMINI_MODEL || "gemini-2.5-pro",
-  });
+  try {
+    return NextResponse.json({
+      default_prompt: DEFAULT_ANALYSIS_PROMPT,
+      categories_hint: (await categoriesHint()).trim(),
+      model: process.env.GEMINI_MODEL || "gemini-2.5-pro",
+    });
+  } catch (err) {
+    return apiErrorResponse(err);
+  }
 }
 
 export async function POST(req: NextRequest) {

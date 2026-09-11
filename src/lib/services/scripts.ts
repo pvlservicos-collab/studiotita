@@ -27,14 +27,16 @@ export interface UpsertScriptInput {
   hook: string;
   structure: string;
   status?: "draft" | "ready" | "published" | "archived";
-  source?: "manual" | "claude_code";
+  source?: "manual" | "claude_code" | "gemini";
+  category?: string | null;
+  generation_prompt?: string | null;
   created_by?: string;
 }
 
 export async function createScript(input: UpsertScriptInput): Promise<ScriptRow> {
   const row = await queryOne<ScriptRow>(
-    `insert into scripts (video_id, title, full_script, hook, structure, status, source, created_by)
-     values ($1,$2,$3,$4,$5,coalesce($6,'draft'),coalesce($7,'manual'),$8)
+    `insert into scripts (video_id, title, full_script, hook, structure, status, source, created_by, category, generation_prompt)
+     values ($1,$2,$3,$4,$5,coalesce($6,'draft'),coalesce($7,'manual'),$8,$9,$10)
      returning *`,
     [
       input.video_id ?? null,
@@ -45,10 +47,19 @@ export async function createScript(input: UpsertScriptInput): Promise<ScriptRow>
       input.status ?? null,
       input.source ?? null,
       input.created_by ?? null,
+      input.category ?? null,
+      input.generation_prompt ?? null,
     ]
   );
   if (!row) throw new Error("Falha ao criar roteiro.");
   return row;
+}
+
+/** Apaga roteiros pelo id; devolve quantos foram apagados. */
+export async function deleteScripts(ids: string[]): Promise<number> {
+  if (!ids.length) return 0;
+  const rows = await query(`delete from scripts where id = any($1::uuid[]) returning id`, [ids]);
+  return rows.length;
 }
 
 export async function updateScript(
