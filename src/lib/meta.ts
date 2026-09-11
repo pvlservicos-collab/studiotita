@@ -218,7 +218,11 @@ type Breakdown = { label: string; value: number }[];
 function readBreakdown(data: any): Breakdown {
   const results = data?.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? [];
   return results
-    .map((r: any) => ({ label: r.dimension_values?.join(" / ") ?? "?", value: r.value ?? 0 }))
+    .map((r: any) => ({
+      // A Meta devolve cidades como "Ribeirão Prêto, São Paulo (state)".
+      label: (r.dimension_values?.join(" / ") ?? "?").replace(/ \(state\)$/, ""),
+      value: r.value ?? 0,
+    }))
     .sort((a: any, b: any) => b.value - a.value);
 }
 

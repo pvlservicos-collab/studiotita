@@ -217,7 +217,7 @@ function BreakdownCard({
                     style={{ width: `${Math.max((r.value / max) * 100, 1)}%`, background: BAR_COLOR }}
                   />
                 </div>
-                <span className="w-24 shrink-0 text-right tabular-nums text-ink-700">
+                <span className="w-32 shrink-0 whitespace-nowrap text-right tabular-nums text-ink-700">
                   {formatCount(r.value, false)}
                   <span className="text-ink-400"> · {Math.round((r.value / total) * 100)}%</span>
                 </span>
@@ -240,7 +240,7 @@ function ColumnChart({ data }: { data: { date: string; value: number }[] }) {
   const fmtDay = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 
   return (
-    <div>
+    <div className="pt-4">
       <div className="flex gap-2">
         {/* eixo y */}
         <div className="relative h-48 w-12 shrink-0 text-right text-[10px] tabular-nums text-ink-400">

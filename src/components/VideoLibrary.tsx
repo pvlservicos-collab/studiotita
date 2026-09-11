@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GlassCard, ProgressBar, EmptyState } from "@/components/ui";
 import AnalysisModal from "@/components/AnalysisModal";
-import { formatCount, formatDuration } from "@/lib/metricLabels";
+import { formatCount, formatDuration, formatShort } from "@/lib/metricLabels";
 import type { AnalysisStatus, VideoRow } from "@/lib/types";
 
 type PollState = { status: AnalysisStatus; startedAt: number; elapsed: number; error?: string | null };
@@ -214,15 +214,15 @@ function VideoCard({ video, poll, onOpen }: { video: VideoRow; poll?: PollState;
     <GlassCard strong className="flex flex-col overflow-hidden">
       {/* métricas no topo do card */}
       <div className="space-y-1.5 px-3 pb-2 pt-3">
-        <div className="grid grid-cols-4 gap-1 text-ink-800">
-          <Stat icon={<EyeIcon />} value={formatCount(video.views)} title="Visualizações" />
-          <Stat icon={<HeartIcon />} value={formatCount(video.likes)} title="Curtidas" />
-          <Stat icon={<CommentIcon />} value={formatCount(video.comments)} title="Comentários" />
-          <Stat icon={<BookmarkIcon />} value={formatCount(video.saves)} title="Salvamentos" />
+        <div className="flex justify-between gap-1.5 text-ink-800">
+          <Stat icon={<EyeIcon />} value={video.views} title="Visualizações" />
+          <Stat icon={<HeartIcon />} value={video.likes} title="Curtidas" />
+          <Stat icon={<CommentIcon />} value={video.comments} title="Comentários" />
+          <Stat icon={<BookmarkIcon />} value={video.saves} title="Salvamentos" />
         </div>
         <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10.5px] text-ink-400">
-          <span title="Compartilhamentos">↗ {formatCount(video.shares)}</span>
-          <span title="Alcance">alc. {formatCount(video.reach)}</span>
+          <span title={`Compartilhamentos: ${formatCount(video.shares, false)}`}>↗ {formatShort(video.shares)}</span>
+          <span title={`Alcance: ${formatCount(video.reach, false)}`}>alc. {formatShort(video.reach)}</span>
           {m.ig_reels_avg_watch_time != null && <span title="Tempo médio assistido">⏱ {formatDuration(m.ig_reels_avg_watch_time)}</span>}
           {m.reels_skip_rate != null && <span title="Taxa de pulo">pulo {Math.round(m.reels_skip_rate)}%</span>}
         </div>
@@ -295,11 +295,11 @@ function VideoCard({ video, poll, onOpen }: { video: VideoRow; poll?: PollState;
   );
 }
 
-function Stat({ icon, value, title }: { icon: React.ReactNode; value: string; title: string }) {
+function Stat({ icon, value, title }: { icon: React.ReactNode; value: number; title: string }) {
   return (
-    <div className="flex items-center gap-1" title={title}>
+    <div className="flex items-center gap-1 whitespace-nowrap" title={`${title}: ${formatCount(value, false)}`}>
       <span className="text-ink-500">{icon}</span>
-      <span className="text-xs font-semibold">{value}</span>
+      <span className="text-xs font-semibold">{formatShort(value)}</span>
     </div>
   );
 }

@@ -57,6 +57,15 @@ export function formatCount(n: number | null | undefined, compact = true) {
   return new Intl.NumberFormat("pt-BR", compact ? { notation: "compact", maximumFractionDigits: 1 } : {}).format(n);
 }
 
+/** Forma curta para espaços apertados (cards): 15,8k · 1,2M. */
+export function formatShort(n: number | null | undefined) {
+  if (n == null) return "—";
+  const fmt = (v: number, suffix: string) => `${(Math.round(v * 10) / 10).toString().replace(".", ",")}${suffix}`;
+  if (Math.abs(n) >= 1_000_000) return fmt(n / 1_000_000, "M");
+  if (Math.abs(n) >= 1_000) return fmt(n / 1_000, "k");
+  return String(n);
+}
+
 export function formatDuration(ms: number | null | undefined) {
   if (ms == null) return "—";
   const s = ms / 1000;
