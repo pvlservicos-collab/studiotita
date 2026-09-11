@@ -235,6 +235,36 @@ export function registerTools(server: McpServer) {
     return { analysis: slimAnalysis(analysis), note: "Análise iniciada. Consulte get_analysis com o video_id em ~30s." };
   });
 
+  tool<{ scope?: "own" | "competitor" | "hashtag" | "all"; competitor_id?: string; hashtag?: string; limit?: number }>("analyze_missing_videos", {
+    title: "Analisar os vídeos que faltam",
+    description:
+      "Dispara a análise do Gemini nos vídeos que ainda NÃO têm análise (os já analisados ficam de fora), até o limite pedido. " +
+      "Cada vídeo leva de 30 a 60 segundos e consome a API do Gemini: confirme com o usuário antes e prefira lotes de até 5. " +
+      "Devolve quantos começaram e quantos ainda faltam; acompanhe com get_analysis e chame de novo para continuar.",
+    inputSchema: {
+      ...scopeSchema,
+      limit: z.number().int().min(1).max(10).optional().describe("Quantos disparar agora (padrão 5)"),
+    },
+  }, async ({ scope, competitor_id, hashtag, limit }) => {
+    const videos = await listVideos({ scope, competitorId: competitor_id, hashtag });
+    const pendentes = videos.filter(
+      (v) =>
+        v.latest_analysis_status !== "done" &&
+        v.latest_analysis_status !== "pending" &&
+        v.latest_analysis_status !== "processing" &&
+        v.media_type !== "IMAGE" &&
+        v.media_type !== "CAROUSEL_ALBUM"
+    );
+    const lote = pendentes.slice(0, limit ?? 5);
+    for (const v of lote) await requestAnalysis(v.id, `claude_code:${getActor()}`);
+    return {
+      iniciadas: lote.length,
+      ainda_faltam: pendentes.length - lote.length,
+      videos: lote.map((v) => ({ video_id: v.id, caption: (v.caption ?? "").split("\n")[0].slice(0, 70) })),
+      nota: "Cada análise leva ~30-60s. Consulte get_analysis com o video_id; chame esta tool de novo para o próximo lote.",
+    };
+  });
+
   tool<{ video_id?: string; analysis_id?: string }>("get_analysis", {
     title: "Ver análise",
     description:

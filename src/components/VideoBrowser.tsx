@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { GlassCard, EmptyState } from "@/components/ui";
+import { GlassCard, EmptyState, ProgressBar } from "@/components/ui";
 import VideoCard, { isBusy, type PollState } from "@/components/VideoCard";
 import AnalysisModal from "@/components/AnalysisModal";
 import ReportDialog from "@/components/ReportDialog";
@@ -153,6 +153,31 @@ export default function VideoBrowser({
     });
   }
 
+  /** Vídeos desta lista que ainda não têm análise do Gemini (imagens ficam de fora). */
+  const pendentes = videos.filter(
+    (v) =>
+      v.latest_analysis_status !== "done" &&
+      !isBusy(v.latest_analysis_status) &&
+      v.media_type !== "IMAGE" &&
+      v.media_type !== "CAROUSEL_ALBUM"
+  );
+
+  async function analyzeAllMissing() {
+    if (!pendentes.length) return;
+    if (
+      !confirm(
+        `Analisar com o Gemini os ${pendentes.length} vídeos que ainda não têm análise? Os já analisados não entram. ` +
+          `Cada vídeo leva de 30 a 60 segundos e consome a API do Gemini; rodam 3 por vez e você pode fechar esta janela depois que começar.`
+      )
+    )
+      return;
+    await analyzeQueue(pendentes.map((v) => v.id), (s) => {
+      setBatch(s);
+      if ((s.done + s.failed) % 3 === 0) load();
+    });
+    load();
+  }
+
   async function analyzeSelected() {
     const pending = shown.filter(
       (v) => selected.has(v.id) && v.latest_analysis_status !== "done" && !isBusy(v.latest_analysis_status) && v.media_type !== "IMAGE" && v.media_type !== "CAROUSEL_ALBUM"
@@ -239,6 +264,18 @@ export default function VideoBrowser({
           >
             Gerar relatório de todos
           </button>
+          <button
+            onClick={analyzeAllMissing}
+            disabled={!pendentes.length || (batch != null && batch.done + batch.failed < batch.total)}
+            title={
+              pendentes.length
+                ? "Manda ao Gemini todos os vídeos que ainda não têm análise (resumo, transcrição, estrutura, gancho, frame a frame e categorias)"
+                : "Todos os vídeos desta lista já foram analisados"
+            }
+            className="btn-gold rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          >
+            {pendentes.length ? `✦ Analisar os ${pendentes.length} sem análise` : "✦ Todos já analisados"}
+          </button>
         </div>
         {actions}
       </div>
@@ -301,6 +338,16 @@ export default function VideoBrowser({
               {batch.done} prontos · {batch.failed} com erro · {batch.total - batch.done - batch.failed} na fila
             </span>
           )}
+        </div>
+      )}
+
+      {batch && (
+        <div className="space-y-1 rounded-xl bg-white/70 px-3 py-2">
+          <div className="text-xs text-ink-600">
+            Análises em andamento: <strong>{batch.done}</strong> prontas · {batch.failed} com erro ·{" "}
+            {batch.total - batch.done - batch.failed} na fila (3 por vez)
+          </div>
+          <ProgressBar progress={((batch.done + batch.failed) / batch.total) * 100} />
         </div>
       )}
 

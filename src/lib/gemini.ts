@@ -165,21 +165,24 @@ Preencha seis campos:
    (verbal), o texto na tela (textual), o que aparece na imagem (visual), quantos segundos dura e qual
    técnica ele usa (acusar um erro, negar uma crença, abrir uma lacuna de curiosidade, promessa, etc.).
 
-5. "frames": a leitura VISUAL do vídeo, frame a frame, do início ao fim, no formato "[00:03] ...".
-   Régua obrigatória: uma linha a cada 1 ou 2 segundos, NUNCA pulando mais de 2 segundos entre uma linha e a
-   seguinte, começando em [00:00] e indo até o último segundo do vídeo. Um vídeo de 60 segundos tem pelo menos
-   30 linhas; um de 3 minutos, pelo menos 90. Quando a imagem não mudar, escreva a linha mesmo assim, dizendo o
-   que a pessoa está fazendo naquele instante (gesto, expressão, palavra enfatizada).
-   Em cada linha descreva o que está na tela naquele momento:
-   - enquadramento e câmera (close, meio corpo, selfie na mão, tripé, zoom, movimento, corte seco);
-   - o que a pessoa faz: gesto, postura, expressão facial, para onde olha;
-   - cenário, roupa, objetos e o que aparece ao fundo;
-   - TODO texto que aparece na tela, copiado palavra por palavra (headline, legenda queimada, emoji, sticker, seta,
-     destaque, marca d'água), com a posição aproximada (topo, centro, rodapé);
-   - inserções: b-roll, print, gráfico, imagem, meme, mudança de cena;
-   - como está a voz nesse trecho: tom (calmo, indignado, provocativo, animado), ritmo, volume, ênfase e pausas.
-   Percorra o vídeo inteiro, mesmo que seja longo. Esta parte precisa ser detalhada o suficiente para alguém
-   remontar a cena sem assistir ao vídeo.
+5. "frames": a leitura do vídeo momento a momento, do início ao fim, SEMPRE neste esquema, um bloco por momento:
+
+[mm:ss]
+TELA: o que aparece na imagem: enquadramento e câmera (close, meio corpo, selfie na mão, tripé, zoom, corte seco),
+      cenário, roupa, objetos, e qualquer inserção (b-roll, print, gráfico, imagem, meme, animação).
+LAYOUT: como a tela está dividida e onde cada coisa fica (tela cheia, split-screen com a pessoa em cima e o
+      conteúdo embaixo, painel lateral, moldura, legenda no rodapé, cor de fundo predominante).
+TEXTO NA TELA: todo texto visível copiado palavra por palavra, com a posição (topo, centro, rodapé) e o estilo
+      (caixa alta, destaque colorido, emoji, sticker, seta, marca d'água). Se não houver, escreva "nenhum".
+FALA: o que está sendo dito nesse momento, entre aspas.
+VOZ: tom (calmo, indignado, provocativo, animado, irônico), ritmo, volume, ênfase em palavras e pausas.
+AÇÃO: o que a pessoa faz: gesto, postura, expressão facial, para onde olha, o que aponta.
+
+   Régua obrigatória: um bloco a cada 1 ou 2 segundos, NUNCA pulando mais de 2 segundos entre um bloco e o
+   seguinte, começando em [00:00] e indo até o último segundo. Um vídeo de 60 segundos tem pelo menos 30 blocos;
+   um de 3 minutos, pelo menos 90. Quando a imagem não mudar, escreva "TELA: mesma cena" e "LAYOUT: igual", mas
+   preencha FALA, VOZ e AÇÃO daquele instante. Esta parte precisa ser detalhada o suficiente para alguém remontar
+   a cena sem assistir ao vídeo.
 
 6. "categorias": de 1 a 3 categorias (temas) abordadas no vídeo, com nomes curtos em português
    (ex.: "Gestão de tempo", "Política", "Organização", "Alta performance", "Filosofia").`;

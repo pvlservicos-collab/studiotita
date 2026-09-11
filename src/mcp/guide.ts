@@ -26,7 +26,8 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
     group: "Análises com o Gemini",
     tools: [
       { name: "get_default_prompt", what: "O prompt padrão enviado ao Gemini e o modelo em uso." },
-      { name: "request_video_analysis", what: "Manda o vídeo ao Gemini: resumo, transcrição, estrutura por segundo, gancho e categorias." },
+      { name: "request_video_analysis", what: "Manda o vídeo ao Gemini: resumo, transcrição, estrutura, gancho, frame a frame e categorias." },
+      { name: "analyze_missing_videos", what: "Dispara a análise em lote só nos vídeos que ainda não têm (os já analisados ficam de fora)." },
       { name: "get_analysis", what: "Status e conteúdo completo de uma análise (por video_id ou analysis_id)." },
       { name: "save_analysis_fields", what: "Preenche/edita resumo, transcrição, estrutura, gancho, categorias e adequação às regras do Augusto." },
     ],
