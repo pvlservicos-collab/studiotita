@@ -1,16 +1,17 @@
 import type { Metadata } from "next";
+import LegalPage, { MailLink, SiteLink, type LegalSection } from "@/components/LegalPage";
+import { LEGAL } from "@/lib/legal";
 
 export const metadata: Metadata = {
-  title: "Termos de Uso — NativeAPI",
-  description:
-    "Termos de uso do aplicativo NativeAPI e dos serviços de integração com a API do WhatsApp Business.",
+  title: `Termos de Uso — ${LEGAL.appName}`,
+  description: `Termos de uso do aplicativo ${LEGAL.appName} e dos serviços de integração com a API do WhatsApp Business.`,
 };
 
-const SECTIONS: { title: string; paragraphs: React.ReactNode[] }[] = [
+const SECTIONS: LegalSection[] = [
   {
     title: "1. Aceitação",
     paragraphs: [
-      "Ao utilizar o NativeAPI, você concorda com estes Termos. Caso não concorde, não utilize o serviço.",
+      `Ao utilizar o ${LEGAL.appName}, você concorda com estes Termos. Caso não concorde, não utilize o serviço.`,
     ],
   },
   {
@@ -46,24 +47,10 @@ const SECTIONS: { title: string; paragraphs: React.ReactNode[] }[] = [
     title: "6. Contato",
     paragraphs: [
       <>
-        📧 E-mail:{" "}
-        <a
-          href="mailto:pvlservicos@gmail.com"
-          className="text-gold-600 underline-offset-2 hover:underline"
-        >
-          pvlservicos@gmail.com
-        </a>
+        📧 E-mail: <MailLink />
       </>,
       <>
-        🌐 Site:{" "}
-        <a
-          href="https://pedrovictorweb.com.br/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-gold-600 underline-offset-2 hover:underline"
-        >
-          https://pedrovictorweb.com.br
-        </a>
+        🌐 Site: <SiteLink />
       </>,
     ],
   },
@@ -71,31 +58,10 @@ const SECTIONS: { title: string; paragraphs: React.ReactNode[] }[] = [
 
 export default function TermosDeUsoPage() {
   return (
-    <article className="glass-strong mx-auto max-w-3xl rounded-2xl px-6 py-8 shadow-glass sm:px-10 sm:py-10">
-      <h1 className="text-3xl font-bold tracking-tight text-ink-900 sm:text-4xl">
-        Termos de Uso
-      </h1>
-      <p className="mt-2 text-sm text-ink-500">Termos de Uso – NativeAPI</p>
-
-      <p className="mt-6 leading-relaxed text-ink-700">
-        Estes Termos regulam o uso do aplicativo NativeAPI e dos serviços de integração com a API do
-        WhatsApp Business.
-      </p>
-
-      <div className="mt-8 space-y-7">
-        {SECTIONS.map((section) => (
-          <section key={section.title}>
-            <h2 className="text-lg font-semibold text-ink-900">{section.title}</h2>
-            <div className="mt-2 space-y-2">
-              {section.paragraphs.map((paragraph, i) => (
-                <p key={i} className="leading-relaxed text-ink-700">
-                  {paragraph}
-                </p>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-    </article>
+    <LegalPage
+      title="Termos de Uso"
+      intro={`Estes Termos regulam o uso do aplicativo ${LEGAL.appName} e dos serviços de integração com a API do WhatsApp Business.`}
+      sections={SECTIONS}
+    />
   );
 }
