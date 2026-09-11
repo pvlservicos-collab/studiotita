@@ -16,10 +16,15 @@ const TABS: { id: Tab; label: string }[] = [
 export default function RoteirosPage() {
   const [tab, setTab] = useState<Tab>("roteiros");
 
-  // permite abrir direto numa aba: /roteiros#categorias
+  // permite abrir direto numa aba: /roteiros#categorias (inclusive trocando só o # na barra de endereço)
   useEffect(() => {
-    const hash = window.location.hash.replace("#", "") as Tab;
-    if (TABS.some((t) => t.id === hash)) setTab(hash);
+    const fromHash = () => {
+      const hash = window.location.hash.replace("#", "") as Tab;
+      if (TABS.some((t) => t.id === hash)) setTab(hash);
+    };
+    fromHash();
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
   }, []);
 
   function select(id: Tab) {

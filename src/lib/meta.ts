@@ -253,7 +253,8 @@ export async function fetchBusinessDiscovery(username: string, mediaLimit = 50) 
 /** Hashtags que a Meta conta na janela de 7 dias (fonte oficial do limite de 30). */
 export async function fetchRecentlySearchedHashtags(): Promise<string[]> {
   const { igUserId } = requireConfig();
-  const data = await graphGet(`${igUserId}/recently_searched_hashtags`, { limit: "30" });
+  // sem fields a Meta devolve só o id
+  const data = await graphGet(`${igUserId}/recently_searched_hashtags`, { fields: "id,name", limit: "30" });
   return (data.data ?? []).map((h: { name?: string }) => h.name?.toLocaleLowerCase("pt-BR")).filter(Boolean);
 }
 

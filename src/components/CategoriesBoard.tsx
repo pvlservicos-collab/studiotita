@@ -90,7 +90,7 @@ export default function CategoriesBoard({ onScriptCreated }: { onScriptCreated: 
               </div>
               <CategoryActions category={cat} onGenerate={() => setGenerateFor(cat)} />
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {cat.videos.map(({ video, enabled }) => (
                 <VideoCard
                   key={video.id}

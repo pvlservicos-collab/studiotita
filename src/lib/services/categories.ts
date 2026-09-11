@@ -50,7 +50,8 @@ export async function listCategories(): Promise<CategoryGroup[]> {
       const g = groups.get(key) ?? { names: new Map<string, number>(), videos: [] as CategoryVideo[] };
       g.names.set(name, (g.names.get(name) ?? 0) + 1);
       g.videos.push({
-        video: { ...video, raw_meta: undefined } as VideoRow,
+        // vem de uma análise concluída: o card mostra "Ver análise" e as categorias
+        video: { ...video, raw_meta: undefined, latest_analysis_id: a_id, latest_analysis_status: "done", latest_analysis_categories: a_categories } as VideoRow,
         enabled: !disabled.has(`${key}|${video.id}`),
         analysis: { id: a_id, summary: a_summary, transcript: a_transcript, structure: a_structure, hook: a_hook, categories: a_categories, model: a_model },
       });
