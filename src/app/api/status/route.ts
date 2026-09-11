@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { checkEnv } from "@/lib/env";
 
+// Sem isso o Next pré-renderiza a rota no build e o status fica congelado.
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const missing = checkEnv();
   return NextResponse.json({

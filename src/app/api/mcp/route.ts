@@ -17,17 +17,14 @@ import { actorStorage } from "@/mcp/actor";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-// Nota: a assinatura exata de createMcpHandler pode variar um pouco entre
-// versões do pacote `mcp-handler`. Se o `npm run build` reclamar aqui,
-// confira o README do pacote instalado (node_modules/mcp-handler/README.md)
-// e ajuste os argumentos — a ideia (registrar as tools num McpServer e
-// expor um handler compatível com Route Handlers do Next.js) permanece a
-// mesma.
+// basePath "/api" faz o mcp-handler atender em /api/mcp (o padrão é /mcp).
+// SSE fica desligado: exigiria Redis e o Claude Code usa o transporte HTTP.
 const mcpHandler = createMcpHandler(
   (server) => {
     registerTools(server);
   },
-  { name: "videoteca-ig", version: "0.1.0" }
+  { serverInfo: { name: "videoteca-ig", version: "0.1.0" } },
+  { basePath: "/api", maxDuration, disableSse: true }
 );
 
 function unauthorized() {
