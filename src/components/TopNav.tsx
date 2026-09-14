@@ -11,6 +11,7 @@ const TABS = [
   { href: "/concorrencia", label: "Concorrência" },
   { href: "/integracoes", label: "Integrações" },
   { href: "/estudio-reels", label: "Estúdio Reels" },
+  { href: "/video", label: "Vídeo" },
 ];
 
 export default function TopNav() {

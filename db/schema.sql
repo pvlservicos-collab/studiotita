@@ -262,3 +262,80 @@ create trigger trg_files_updated_at before update on files
 drop trigger if exists trg_competitors_updated_at on competitors;
 create trigger trg_competitors_updated_at before update on competitors
   for each row execute procedure set_updated_at();
+
+-- ============================================================
+-- v5: STUDIO_FLOWS — os fluxos do Estúdio Reels (as "metadinhas":
+-- o Augusto em cima e a tela do estúdio na metade de baixo).
+--
+-- kind = 'referencia': fluxo real do Augusto, ligado ao vídeo em que
+--   foi usado. É com esses que o sistema aprende.
+-- kind = 'gerado': o esquema que o sistema monta quando uma análise
+--   fica pronta (toggle "Gerar metadinha" ligado).
+--
+-- scenes  = as cenas no formato do app (tempo, tipo, textos, agenda...)
+-- project = o mesmo fluxo no formato de projeto do estúdio, pronto para
+--           abrir em /estudio-reels.html?fluxo=<id>
+-- ============================================================
+create table if not exists studio_flows (
+  id              uuid primary key default gen_random_uuid(),
+  video_id        uuid references videos(id) on delete set null,
+  analysis_id     uuid references analyses(id) on delete set null,
+  kind            text not null default 'gerado' check (kind in ('referencia', 'gerado')),
+  title           text not null default 'Fluxo sem título',
+  summary         text,                        -- por que este fluxo combina com o vídeo
+  scenes          jsonb,                       -- cenas no formato do app (StudioScene[])
+  project         jsonb,                       -- projeto do estúdio pronto para abrir ({c: [...], t: [...]})
+  -- referência: como o fluxo foi ligado ao vídeo (cenas do projeto embutido, reconstrução pelo frame a frame...)
+  link_source     text,
+  link_confidence text check (link_confidence in ('alta', 'media', 'baixa')),
+  link_reason     text,
+  status          text not null default 'done' check (status in ('pending', 'processing', 'done', 'error')),
+  error_message   text,
+  prompt          text,
+  model           text,
+  created_by      text,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists idx_studio_flows_video on studio_flows (video_id, created_at desc);
+create index if not exists idx_studio_flows_analysis on studio_flows (analysis_id);
+create index if not exists idx_studio_flows_kind on studio_flows (kind, created_at desc);
+
+drop trigger if exists trg_studio_flows_updated_at on studio_flows;
+create trigger trg_studio_flows_updated_at before update on studio_flows
+  for each row execute procedure set_updated_at();
+
+-- ============================================================
+-- v6: VIDEO_PROJECTS — a aba Vídeo (o motor de edição).
+--
+-- Um projeto é o vídeo bruto que o Augusto gravou + as telas da metadinha +
+-- legendas + cortes de silêncio + música. Tudo o que a linha do tempo precisa
+-- fica no campo `project` (o formato está em src/lib/video/types.ts).
+-- ============================================================
+create table if not exists video_projects (
+  id              uuid primary key default gen_random_uuid(),
+  title           text not null default 'Vídeo sem título',
+  /* de onde vieram as telas e a transcrição */
+  flow_id         uuid references studio_flows(id) on delete set null,
+  script_id       uuid references scripts(id) on delete set null,
+  video_id        uuid references videos(id) on delete set null,
+  /* arquivo bruto no Vercel Blob */
+  source_url      text,
+  source_name     text,
+  duration        numeric,
+  /* o projeto inteiro (VideoProject) */
+  project         jsonb not null,
+  /* último arquivo exportado, quando o usuário salvar no Blob */
+  export_url      text,
+  status          text not null default 'rascunho' check (status in ('rascunho', 'pronto', 'exportado')),
+  created_by      text,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists idx_video_projects_created on video_projects (created_at desc);
+
+drop trigger if exists trg_video_projects_updated_at on video_projects;
+create trigger trg_video_projects_updated_at before update on video_projects
+  for each row execute procedure set_updated_at();

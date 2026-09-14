@@ -2,8 +2,46 @@
 
 import { useEffect, useState } from "react";
 import { Badge, ProgressBar } from "@/components/ui";
+import StudioFlowCard from "@/components/StudioFlowCard";
 import { VIDEO_METRICS, formatMetric } from "@/lib/metricLabels";
 import type { AnalysisRow, VideoRow } from "@/lib/types";
+
+/** O toggle "Gerar metadinha" fica lembrado entre as análises. */
+export const METADINHA_KEY = "videoteca:gerar-metadinha";
+
+export function lerPreferenciaMetadinha() {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(METADINHA_KEY) !== "0";
+}
+
+export function salvarPreferenciaMetadinha(valor: boolean) {
+  try {
+    window.localStorage.setItem(METADINHA_KEY, valor ? "1" : "0");
+  } catch {
+    // navegador sem armazenamento: o padrão (ligado) continua valendo
+  }
+}
+
+/** Chave liga/desliga no padrão do painel. */
+export function Toggle({ on, onChange, title, hint }: { on: boolean; onChange: (v: boolean) => void; title: string; hint?: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      className="flex items-center gap-2 text-left"
+    >
+      <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${on ? "bg-gold-500" : "bg-ink-200"}`}>
+        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? "left-[22px]" : "left-0.5"}`} />
+      </span>
+      <span className="text-xs text-ink-600">
+        <strong className="text-ink-800">{title}</strong>
+        {hint && <span className="block text-[11px] text-ink-400">{hint}</span>}
+      </span>
+    </button>
+  );
+}
 
 type Mode = "view" | "new";
 
@@ -173,6 +211,9 @@ function NewAnalysisForm({ videoId, onSent }: { videoId: string; onSent: () => v
   const [hint, setHint] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [metadinha, setMetadinha] = useState(true);
+
+  useEffect(() => setMetadinha(lerPreferenciaMetadinha()), []);
 
   useEffect(() => {
     fetch("/api/analyses")
@@ -192,7 +233,7 @@ function NewAnalysisForm({ videoId, onSent }: { videoId: string; onSent: () => v
       const res = await fetch("/api/analyses", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ video_id: videoId, requested_by: "pedro", prompt }),
+        body: JSON.stringify({ video_id: videoId, requested_by: "pedro", prompt, studio_flow: metadinha }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao pedir análise.");
@@ -228,6 +269,17 @@ function NewAnalysisForm({ videoId, onSent }: { videoId: string; onSent: () => v
         </p>
       )}
       {error && <p className="text-xs text-rose-600">{error}</p>}
+      <div className="rounded-lg border border-gold-200 bg-white/70 px-3 py-2.5">
+        <Toggle
+          on={metadinha}
+          onChange={(v) => {
+            setMetadinha(v);
+            salvarPreferenciaMetadinha(v);
+          }}
+          title="Gerar metadinha no Estúdio Reels"
+          hint="quando a análise ficar pronta, o sistema monta as telas da metade de baixo que combinam com este vídeo, no padrão dos fluxos do Augusto"
+        />
+      </div>
       <div className="flex flex-wrap justify-between gap-2">
         <button
           onClick={() => setPrompt(defaultPrompt)}
@@ -300,6 +352,7 @@ function AnalysisView({ analysis, onSaved }: { analysis: AnalysisRow; onSaved: (
             hint="o que aparece na tela segundo a segundo e como está a voz — é a base para montar as cenas"
             collapsible
           />
+          <StudioFlowCard analysisId={analysis.id} videoId={analysis.video_id} />
           <section className="rounded-xl border border-ink-100 bg-white/70 p-4">
             <div className="mb-2 flex items-center gap-2">
               <h3 className="text-sm font-semibold text-ink-900">Categorias</h3>

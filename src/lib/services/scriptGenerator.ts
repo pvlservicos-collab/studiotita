@@ -10,6 +10,7 @@ import { generateJsonWithGemini } from "@/lib/gemini";
 import { categoryKey } from "@/lib/categories";
 import { selectBest, periodRange, rankValue, RANK_METRICS, type PeriodId, type RankMetric } from "@/lib/periods";
 import { ESTUDIO_REELS_FILE, ESTUDIO_REELS_GUIDE, SCENES_INSTRUCTION } from "@/lib/estudioReels";
+import { padroesText } from "@/lib/services/studioFlows";
 import { listVideos } from "@/lib/services/videos";
 import { latestDoneAnalyses } from "@/lib/services/report";
 import { listCategories, referenceMarkdown, CategoryInputError } from "@/lib/services/categories";
@@ -193,7 +194,12 @@ export async function buildGenerationPrompt(input: GenerateOptions) {
   if (opts.instructions?.trim()) parts.push(`\n=== INSTRUÇÕES EXTRAS ===\n${opts.instructions.trim()}`);
   if (opts.scenes) {
     const guide = (await libraryText(ESTUDIO_REELS_FILE)) ?? ESTUDIO_REELS_GUIDE;
-    parts.push(`\n=== ESTÚDIO REELS (as cenas que o Augusto consegue montar) ===\n${guide}\n\n${SCENES_INSTRUCTION}`);
+    const padroes = await padroesText();
+    parts.push(
+      `\n=== ESTÚDIO REELS (as cenas que o Augusto consegue montar) ===\n${guide}` +
+        `\n\n=== PADRÕES DAS METADINHAS DELE (aprendidos dos fluxos reais) ===\n${padroes.text}` +
+        `\n\n${SCENES_INSTRUCTION}`
+    );
   }
   parts.push(
     `\nResponda preenchendo os campos: "titulo" (curto), "gancho" (verbal, textual e visual), "estrutura" (as partes com os segundos e o gatilho/emoção de cada uma), "roteiro_completo" (o roteiro inteiro, pronto para gravar, com as marcações de tempo) e "observacoes" (contagem de palavras, 2 ganchos alternativos, sugestão de headline e qualquer ponto a [CONFERIR]).`

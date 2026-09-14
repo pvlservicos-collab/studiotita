@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { GlassCard, EmptyState } from "@/components/ui";
 import { formatShort, formatDuration } from "@/lib/metricLabels";
+import MetadinhaPreview from "@/components/MetadinhaPreview";
+import type { StudioScene } from "@/lib/studio/scenes";
 
 type VideoScript = {
   video_id: string;
@@ -26,6 +28,10 @@ type VideoScript = {
   categories: string[] | null;
   model: string | null;
   completed_at: string | null;
+  flow_id: string | null;
+  flow_title: string | null;
+  flow_summary: string | null;
+  flow_scenes: StudioScene[] | null;
 };
 
 type Scope = "all" | "own" | "competitor";
@@ -152,6 +158,35 @@ function VideoScriptCard({ s }: { s: VideoScript }) {
             ))}
           </div>
         )}
+        {s.flow_id && s.flow_scenes?.length ? (
+          <div className="rounded-xl border border-gold-200 bg-gold-50/50 p-3">
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-gold-600">
+                Metadinha no Estúdio Reels · {s.flow_scenes.length} telas
+              </div>
+              <div className="flex gap-1.5">
+                <a
+                  href={`/estudio-reels.html?fluxo=${s.flow_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-gold-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-gold-700 hover:bg-gold-50"
+                >
+                  Abrir no Estúdio ↗
+                </a>
+                <a
+                  href={`/metadinha/${s.flow_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-ink-200 bg-white px-2.5 py-1 text-[11px] text-ink-700 hover:bg-ink-50"
+                >
+                  Ver tudo ↗
+                </a>
+              </div>
+            </div>
+            <MetadinhaPreview cenas={s.flow_scenes} />
+            {s.flow_summary && <p className="mt-1.5 line-clamp-2 text-xs text-ink-600">{s.flow_summary}</p>}
+          </div>
+        ) : null}
         {s.hook && <TextBlock title="Gancho identificado pelo Gemini" text={s.hook} />}
         {s.structure && <TextBlock title="Estrutura gerada pelo Gemini" text={s.structure} clamp={!open} />}
         {open && s.transcript && <TextBlock title="Roteiro (transcrição do Gemini)" text={s.transcript} />}

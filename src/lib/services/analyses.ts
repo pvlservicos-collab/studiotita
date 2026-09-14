@@ -90,7 +90,9 @@ export async function categoriesHint() {
 export async function requestAnalysis(
   videoId: string,
   requestedBy: string,
-  customPrompt?: string | null
+  customPrompt?: string | null,
+  /** monta a metadinha do Estúdio Reels assim que a análise ficar pronta (padrão: sim) */
+  studioFlow = true
 ): Promise<AnalysisRow> {
   const prompt = (customPrompt?.trim() || DEFAULT_ANALYSIS_PROMPT) + (await categoriesHint());
   const model = process.env.GEMINI_MODEL || "gemini-2.5-pro";
@@ -116,7 +118,7 @@ export async function requestAnalysis(
   if (!analysis) throw new Error("Falha ao criar registro de análise.");
 
   waitUntil(
-    processAnalysis(analysis.id, video, prompt).catch((err) => {
+    processAnalysis(analysis.id, video, prompt, studioFlow, requestedBy).catch((err) => {
       console.error(`Erro ao processar análise ${analysis.id}:`, err);
     })
   );
@@ -149,7 +151,13 @@ async function resolveVideoUrl(video: VideoRow): Promise<string> {
   throw new AnalysisInputError(video.source === "hashtag" ? NO_FILE_HINT : `A Meta não devolveu o link do vídeo ${video.id}.`);
 }
 
-async function processAnalysis(analysisId: string, video: VideoRow, prompt: string) {
+async function processAnalysis(
+  analysisId: string,
+  video: VideoRow,
+  prompt: string,
+  studioFlow = true,
+  requestedBy = "pedro"
+) {
   await query(`update analyses set status = 'processing' where id = $1`, [analysisId]);
 
   try {
@@ -171,6 +179,16 @@ async function processAnalysis(analysisId: string, video: VideoRow, prompt: stri
         JSON.stringify(result.raw),
       ]
     );
+
+    // Com o toggle ligado, o sistema já monta o esquema de telas do Estúdio
+    // Reels que combina com este vídeo. Se falhar, a análise continua válida:
+    // o erro fica gravado no próprio fluxo e dá para gerar de novo no painel.
+    if (studioFlow) {
+      const { generateStudioFlow } = await import("@/lib/services/studioFlows");
+      await generateStudioFlow(analysisId, requestedBy).catch((err) => {
+        console.error(`Erro ao montar a metadinha da análise ${analysisId}:`, err);
+      });
+    }
   } catch (err) {
     const message =
       err instanceof GeminiConfigError || err instanceof GeminiRequestError || err instanceof AnalysisInputError

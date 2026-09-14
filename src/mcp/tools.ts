@@ -24,6 +24,16 @@ import {
 import { listCategories, setCategorySelection, compileCategoryScripts } from "@/lib/services/categories";
 import { generateCategoryScript, generateScript } from "@/lib/services/scriptGenerator";
 import { listVideoScripts } from "@/lib/services/videoScripts";
+import {
+  generateFlowForVideo,
+  generateStudioFlow,
+  getStudioFlow,
+  linkStudioFlow,
+  listStudioFlows,
+  padroesText,
+} from "@/lib/services/studioFlows";
+import { flowToText, type StudioScene } from "@/lib/studio/scenes";
+import { flowLinks } from "@/lib/appUrl";
 import { addCompetitors, getOwnStats, listCompetitors, removeCompetitor, syncCompetitor } from "@/lib/services/competitors";
 import { getHashtagQuota, listHashtagSearches, searchHashtag } from "@/lib/services/hashtags";
 import { buildReport, selectPosts } from "@/lib/services/report";
@@ -221,21 +231,26 @@ export function registerTools(server: McpServer) {
     inputSchema: {},
   }, async () => ({ default_prompt: DEFAULT_ANALYSIS_PROMPT, model: process.env.GEMINI_MODEL || "gemini-2.5-pro" }));
 
-  tool<{ video_id: string; prompt?: string }>("request_video_analysis", {
+  tool<{ video_id: string; prompt?: string; studio_flow?: boolean }>("request_video_analysis", {
     title: "Analisar vídeo com o Gemini",
     description:
       "Envia o vídeo (do Augusto, de concorrente ou de hashtag) ao Gemini. Sem prompt, usa o padrão. A resposta sempre volta em summary, transcript, " +
-      "structure, hook e categories. Roda em background (~30-60s): acompanhe com get_analysis. Consome a API do Gemini: só dispare quando o usuário pedir.",
+      "structure, hook e categories. Quando a análise fica pronta, o sistema também monta a metadinha do Estúdio Reels do vídeo (studio_flow=false desliga). " +
+      "Roda em background (~30-60s): acompanhe com get_analysis. Consome a API do Gemini: só dispare quando o usuário pedir.",
     inputSchema: {
       video_id: z.string().describe("UUID do vídeo"),
       prompt: z.string().optional().describe("Prompt personalizado (opcional)"),
+      studio_flow: z.boolean().optional().describe("Montar a metadinha do Estúdio Reels no fim (padrão: true)"),
     },
-  }, async ({ video_id, prompt }) => {
-    const analysis = await requestAnalysis(video_id, `claude_code:${getActor()}`, prompt);
-    return { analysis: slimAnalysis(analysis), note: "Análise iniciada. Consulte get_analysis com o video_id em ~30s." };
+  }, async ({ video_id, prompt, studio_flow }) => {
+    const analysis = await requestAnalysis(video_id, `claude_code:${getActor()}`, prompt, studio_flow !== false);
+    return {
+      analysis: slimAnalysis(analysis),
+      note: "Análise iniciada. Consulte get_analysis com o video_id em ~30s; a metadinha aparece em list_studio_flows logo depois.",
+    };
   });
 
-  tool<{ scope?: "own" | "competitor" | "hashtag" | "all"; competitor_id?: string; hashtag?: string; limit?: number; include_outdated?: boolean }>("analyze_missing_videos", {
+  tool<{ scope?: "own" | "competitor" | "hashtag" | "all"; competitor_id?: string; hashtag?: string; limit?: number; include_outdated?: boolean; studio_flow?: boolean }>("analyze_missing_videos", {
     title: "Analisar os vídeos que faltam",
     description:
       "Dispara a análise do Gemini nos vídeos que ainda NÃO têm análise (os já analisados ficam de fora), até o limite pedido. " +
@@ -246,8 +261,9 @@ export function registerTools(server: McpServer) {
       ...scopeSchema,
       limit: z.number().int().min(1).max(10).optional().describe("Quantos disparar agora (padrão 5)"),
       include_outdated: z.boolean().optional().describe("Incluir análises antigas, sem o frame a frame"),
+      studio_flow: z.boolean().optional().describe("Montar a metadinha do Estúdio Reels de cada um (padrão: true)"),
     },
-  }, async ({ scope, competitor_id, hashtag, limit, include_outdated }) => {
+  }, async ({ scope, competitor_id, hashtag, limit, include_outdated, studio_flow }) => {
     const videos = await listVideos({ scope, competitorId: competitor_id, hashtag });
     const pendentes = videos.filter(
       (v) =>
@@ -258,7 +274,7 @@ export function registerTools(server: McpServer) {
         (v.latest_analysis_status !== "done" || (include_outdated === true && v.latest_analysis_has_frames === false))
     );
     const lote = pendentes.slice(0, limit ?? 5);
-    for (const v of lote) await requestAnalysis(v.id, `claude_code:${getActor()}`);
+    for (const v of lote) await requestAnalysis(v.id, `claude_code:${getActor()}`, null, studio_flow !== false);
     return {
       iniciadas: lote.length,
       ainda_faltam: pendentes.length - lote.length,
@@ -426,6 +442,96 @@ export function registerTools(server: McpServer) {
       `claude_code:${getActor()}`
     ),
   }));
+
+  // ------------------------------------------- Estúdio Reels (metadinhas)
+  tool<{ kind?: "referencia" | "gerado"; video_id?: string; limit?: number; include_scenes?: boolean }>("list_studio_flows", {
+    title: "Listar fluxos do Estúdio Reels",
+    description:
+      "Os fluxos de tela do Estúdio Reels (as metadinhas: o Augusto em cima, a tela do estúdio na metade de baixo). " +
+      "kind='referencia' são os fluxos reais dele, ligados ao vídeo em que foram usados (é com eles que o sistema aprende); " +
+      "kind='gerado' são os que o sistema montou a partir de uma análise. Com include_scenes=true vêm as cenas em texto.",
+    inputSchema: {
+      kind: z.enum(["referencia", "gerado"]).optional(),
+      video_id: z.string().optional().describe("UUID do vídeo"),
+      limit: z.number().int().positive().optional(),
+      include_scenes: z.boolean().optional().describe("Trazer as cenas de cada fluxo em texto"),
+    },
+  }, async ({ kind, video_id, limit, include_scenes }) => {
+    const flows = await listStudioFlows({ kind, videoId: video_id, limit });
+    return {
+      total: flows.length,
+      flows: flows.map((f) => ({
+        id: f.id,
+        kind: f.kind,
+        title: f.title,
+        summary: f.summary,
+        status: f.status,
+        video_id: f.video_id,
+        video: f.video_caption ? f.video_caption.split("\n")[0].slice(0, 70) : null,
+        video_views: f.video_views,
+        link_confidence: f.link_confidence,
+        link_reason: f.link_reason,
+        ...flowLinks(f.id),
+        cenas: include_scenes ? flowToText((f.scenes as StudioScene[]) ?? []) : undefined,
+      })),
+    };
+  });
+
+  tool<{ flow_id: string }>("get_studio_flow", {
+    title: "Ver um fluxo do Estúdio Reels",
+    description:
+      "O fluxo inteiro: cenas com tempo, tipo, texto da tela, agenda/gráfico/sono, fala e instrução de gravação. " +
+      "Devolve também os links: 'ver' (página com a prévia das telas, para mandar ao usuário) e 'abrir_no_estudio'.",
+    inputSchema: { flow_id: z.string().describe("UUID do fluxo") },
+  }, async ({ flow_id }) => {
+    const flow = await getStudioFlow(flow_id);
+    if (!flow) throw new Error(`Fluxo ${flow_id} não encontrado.`);
+    return {
+      ...flow,
+      project: undefined,
+      cenas_em_texto: flowToText((flow.scenes as StudioScene[]) ?? []),
+      ...flowLinks(flow.id),
+    };
+  });
+
+  tool<{ video_id?: string; analysis_id?: string }>("generate_studio_flow", {
+    title: "Montar a metadinha de um vídeo",
+    description:
+      "Monta (ou refaz) o esquema de telas do Estúdio Reels que combina com um vídeo já analisado, usando os padrões dos fluxos do Augusto. " +
+      "Passe video_id (usa a análise mais recente) ou analysis_id. Devolve as cenas e o LINK da metadinha para mandar ao usuário. Consome a API do Gemini: só dispare quando o usuário pedir.",
+    inputSchema: {
+      video_id: z.string().optional().describe("UUID do vídeo"),
+      analysis_id: z.string().optional().describe("UUID da análise"),
+    },
+  }, async ({ video_id, analysis_id }) => {
+    const actor = `claude_code:${getActor()}`;
+    const flow = analysis_id ? await generateStudioFlow(analysis_id, actor) : await generateFlowForVideo(String(video_id), actor);
+    return {
+      flow: { ...flow, project: undefined },
+      cenas_em_texto: flowToText((flow.scenes as StudioScene[]) ?? []),
+      ...flowLinks(flow.id),
+      nota: "Mande o link \"ver\" para o usuário abrir a prévia das telas, e o \"abrir_no_estudio\" para editar no Estúdio Reels.",
+    };
+  });
+
+  tool<{ flow_id: string; video_id: string | null; reason?: string }>("link_studio_flow", {
+    title: "Ligar um fluxo a um vídeo",
+    description:
+      "Liga um fluxo do Estúdio Reels ao vídeo em que ele foi usado (ou desliga com video_id null). Serve para corrigir as ligações dos fluxos de referência.",
+    inputSchema: {
+      flow_id: z.string(),
+      video_id: z.string().nullable().describe("UUID do vídeo, ou null para desligar"),
+      reason: z.string().optional().describe("Por que este fluxo é deste vídeo"),
+    },
+  }, async ({ flow_id, video_id, reason }) => ({ flow: await linkStudioFlow(flow_id, video_id, reason) }));
+
+  tool("get_studio_patterns", {
+    title: "Padrões das metadinhas do Augusto",
+    description:
+      "O texto que ensina como o Augusto monta as telas do Estúdio Reels (tirado dos fluxos reais dele). É o que guia toda metadinha nova. " +
+      'Editável na Biblioteca pelo arquivo "estudio-reels-padroes.md".',
+    inputSchema: {},
+  }, async () => padroesText());
 
   tool<{ scope?: "own" | "competitor" | "all"; competitor_id?: string; search?: string; limit?: number }>("list_video_scripts", {
     title: "Roteiros extraídos dos vídeos",

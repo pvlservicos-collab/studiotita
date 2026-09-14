@@ -138,3 +138,35 @@ export interface MetaInsightRow {
   value: number | null;
   captured_at: string;
 }
+
+/** Fluxo do Estúdio Reels: a sequência de telas da metade de baixo ("metadinha"). */
+export interface StudioFlowRow {
+  id: string;
+  video_id: string | null;
+  analysis_id: string | null;
+  /** 'referencia' = fluxo real do Augusto (é com ele que o sistema aprende); 'gerado' = montado pelo sistema */
+  kind: "referencia" | "gerado";
+  title: string;
+  summary: string | null;
+  /** cenas no formato do app (StudioScene[]) */
+  scenes: unknown;
+  /** projeto pronto para abrir no estúdio ({ c: [...], t: [...] }) */
+  project: unknown;
+  link_source: string | null;
+  link_confidence: "alta" | "media" | "baixa" | null;
+  link_reason: string | null;
+  status: AnalysisStatus;
+  error_message: string | null;
+  prompt: string | null;
+  model: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  // vêm do join com videos
+  video_caption?: string | null;
+  video_thumbnail_url?: string | null;
+  video_permalink?: string | null;
+  video_views?: number | null;
+  video_saves?: number | null;
+  video_posted_at?: string | null;
+}

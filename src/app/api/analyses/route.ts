@@ -31,7 +31,13 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const analysis = await requestAnalysis(body.video_id, body.requested_by ?? "pedro", body.prompt);
+    // studio_flow (padrão: true) = já monta a metadinha do Estúdio Reels quando a análise ficar pronta
+    const analysis = await requestAnalysis(
+      body.video_id,
+      body.requested_by ?? "pedro",
+      body.prompt,
+      body.studio_flow !== false
+    );
     return NextResponse.json({ analysis }, { status: 202 });
   } catch (err) {
     return apiErrorResponse(err);

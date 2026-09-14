@@ -7977,6 +7977,33 @@ if(vs && typeof PADRAO !== 'undefined' && PADRAO.v) vs.textContent = 'v' + Strin
 registrar();
 carregar();
 mostrar(0);
+
+// ---------- abrir um fluxo da Videoteca: /estudio-reels.html?fluxo=<id> ----------
+// O painel monta a metadinha do vídeo (as telas da metade de baixo) e manda o
+// id aqui. O estúdio abre o projeto como se fosse um arquivo salvo: o que
+// estava aberto é substituído, então só chega aqui quem clicou no link.
+(async function abrirFluxoDaVideoteca(){
+  var id = null;
+  try{ id = new URLSearchParams(location.search).get('fluxo'); }catch(e){}
+  if(!id) return;
+  try{
+    const r = await fetch('/api/studio-flows/' + encodeURIComponent(id) + '?formato=estudio');
+    if(!r.ok) throw new Error('resposta ' + r.status);
+    const d = expandirImagens(await r.json());
+    if(!d || !d.c || !d.c.length) throw new Error('fluxo vazio');
+    CENAS.length = 0; d.c.forEach(x=> CENAS.push(x));
+    tracos.length = 0; (d.t || []).forEach(x=> tracos.push(x));
+    while(tracos.length < CENAS.length) tracos.push([]);
+    migrarAgenda(d);
+    agSel = null; blocoSel = null; selecionada = null;
+    i = 0;
+    historico = [foto()]; hpos = 0;
+    pintarAgenda();
+    mostrar(0);
+    atualizarBotoes();
+    avisar('Fluxo da Videoteca: ' + CENAS.length + ' cenas. Salvar baixa o arquivo.');
+  }catch(e){ avisar('Não deu para abrir o fluxo da Videoteca'); }
+})();
 })();
 
 /* ===== pentágono da semana, código original, em escopo próprio ===== */

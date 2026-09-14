@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GlassCard, EmptyState, ProgressBar } from "@/components/ui";
 import VideoCard, { isBusy, type PollState } from "@/components/VideoCard";
-import AnalysisModal from "@/components/AnalysisModal";
+import AnalysisModal, { Toggle, lerPreferenciaMetadinha, salvarPreferenciaMetadinha } from "@/components/AnalysisModal";
 import ReportDialog from "@/components/ReportDialog";
 import { analyzeQueue } from "@/lib/analyzeQueue";
 import { PERIODS, RANK_METRICS, rankValue, selectBest, type PeriodId, type RankMetric } from "@/lib/periods";
@@ -68,6 +68,9 @@ export default function VideoBrowser({
   const [searchTerm, setSearchTerm] = useState("");
   const [reportOpen, setReportOpen] = useState(false);
   const [polls, setPolls] = useState<Record<string, PollState>>({});
+  // metadinha do Estúdio Reels junto com cada análise (lembrado no navegador)
+  const [metadinha, setMetadinha] = useState(true);
+
   const timers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
   async function load() {
@@ -92,6 +95,8 @@ export default function VideoBrowser({
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeQuery, reloadToken, searchTerm]);
+
+  useEffect(() => setMetadinha(lerPreferenciaMetadinha()), []);
 
   // busca por palavra (legenda, transcrição e categorias), com uma pausa ao digitar
   useEffect(() => {
@@ -168,10 +173,15 @@ export default function VideoBrowser({
   async function rodarFila(lista: VideoRow[], texto: string) {
     if (!lista.length) return;
     if (!confirm(texto)) return;
-    await analyzeQueue(lista.map((v) => v.id), (s) => {
-      setBatch(s);
-      if ((s.done + s.failed) % 3 === 0) load();
-    });
+    await analyzeQueue(
+      lista.map((v) => v.id),
+      (s) => {
+        setBatch(s);
+        if ((s.done + s.failed) % 3 === 0) load();
+      },
+      3,
+      metadinha
+    );
     load();
   }
 
@@ -179,7 +189,8 @@ export default function VideoBrowser({
     rodarFila(
       pendentes,
       `Analisar com o Gemini os ${pendentes.length} vídeos que ainda não têm análise? Os já analisados não entram. ` +
-        `Cada vídeo leva de 30 a 60 segundos e consome a API do Gemini; rodam 3 por vez e você pode fechar esta janela depois que começar.`
+        `Cada vídeo leva de 30 a 60 segundos e consome a API do Gemini; rodam 3 por vez e você pode fechar esta janela depois que começar.` +
+        (metadinha ? " Cada análise também vai montar a metadinha do Estúdio Reels." : "")
     );
 
   const atualizarAntigas = () =>
@@ -195,10 +206,15 @@ export default function VideoBrowser({
     );
     if (!pending.length) return alert("Os vídeos marcados já têm relatório do Gemini (ou são imagens).");
     if (!confirm(`Gerar o relatório do Gemini de ${pending.length} vídeos? Cada um consome a API do Gemini (~30-60s, 3 por vez).`)) return;
-    await analyzeQueue(pending.map((v) => v.id), (s) => {
-      setBatch(s);
-      if (s.done + s.failed > 0) load();
-    });
+    await analyzeQueue(
+      pending.map((v) => v.id),
+      (s) => {
+        setBatch(s);
+        if (s.done + s.failed > 0) load();
+      },
+      3,
+      metadinha
+    );
     setSelected(new Set());
     load();
   }
@@ -287,6 +303,17 @@ export default function VideoBrowser({
           >
             {pendentes.length ? `✦ Analisar os ${pendentes.length} sem análise` : "✦ Todos já analisados"}
           </button>
+          <div className="flex items-center rounded-xl border border-gold-200 bg-white/70 px-3 py-1.5">
+            <Toggle
+              on={metadinha}
+              onChange={(v) => {
+                setMetadinha(v);
+                salvarPreferenciaMetadinha(v);
+              }}
+              title="Gerar metadinha"
+              hint="monta as telas do Estúdio Reels junto com cada análise"
+            />
+          </div>
           {desatualizados.length > 0 && (
             <button
               onClick={atualizarAntigas}

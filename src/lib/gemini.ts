@@ -292,7 +292,11 @@ export async function analyzeVideoWithGemini(
  * Pedido só de texto ao Gemini (sem vídeo), com resposta em JSON no formato
  * do schema. Usado para gerar roteiros novos a partir de uma categoria.
  */
-export async function generateJsonWithGemini<T>(prompt: string, schema: object): Promise<{ result: T; model: string; raw: unknown }> {
+export async function generateJsonWithGemini<T>(
+  prompt: string,
+  schema: object,
+  opts: { maxOutputTokens?: number; temperature?: number } = {}
+): Promise<{ result: T; model: string; raw: unknown }> {
   const apiKey = requireApiKey();
   const model = modelName();
   const res = await fetch(`${GEMINI_API_BASE}/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -300,7 +304,12 @@ export async function generateJsonWithGemini<T>(prompt: string, schema: object):
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", responseSchema: schema },
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+        ...(opts.maxOutputTokens ? { maxOutputTokens: opts.maxOutputTokens } : {}),
+        ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
+      },
     }),
   });
   if (!res.ok) {
@@ -308,9 +317,90 @@ export async function generateJsonWithGemini<T>(prompt: string, schema: object):
   }
   const data = await res.json();
   const text: string = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
+  const finish = data?.candidates?.[0]?.finishReason;
   try {
     return { result: JSON.parse(text) as T, model, raw: data };
   } catch {
-    throw new GeminiRequestError(`O Gemini respondeu fora do formato esperado: ${text.slice(0, 300)}`);
+    if (finish === "MAX_TOKENS") {
+      throw new GeminiRequestError(
+        "A resposta do Gemini foi cortada no meio (limite de tokens). Peça menos itens ou aumente maxOutputTokens."
+      );
+    }
+    throw new GeminiRequestError(`O Gemini respondeu fora do formato esperado (${finish ?? "sem motivo"}): ${text.slice(0, 300)}`);
+  }
+}
+
+/**
+ * Transcrição com tempo de início e fim de cada trecho — usada para a legenda
+ * automática da aba Vídeo, quando o arquivo é novo (ainda não tem análise).
+ */
+export interface TrechoFala {
+  inicio: number;
+  fim: number;
+  texto: string;
+}
+
+const TRANSCRICAO_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    trechos: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          inicio: { type: "NUMBER" },
+          fim: { type: "NUMBER" },
+          texto: { type: "STRING" },
+        },
+        required: ["inicio", "fim", "texto"],
+      },
+    },
+  },
+  required: ["trechos"],
+};
+
+export async function transcribeVideoWithGemini(videoUrl: string): Promise<{ trechos: TrechoFala[]; model: string }> {
+  const apiKey = requireApiKey();
+  const model = modelName();
+  const uploaded = await uploadVideoToGemini(videoUrl);
+  await waitUntilActive(uploaded.name, apiKey);
+
+  const prompt = `Transcreva a fala deste vídeo em português do Brasil, do primeiro ao último segundo.
+Devolva "trechos": uma lista em ordem, cada um com "inicio" e "fim" em SEGUNDOS (número, pode ter decimal) e "texto" com a fala literal daquele intervalo.
+Cada trecho deve ter entre 1 e 4 segundos e no máximo 90 caracteres — é para virar legenda na tela.
+Não descreva imagens, não escreva nada que não seja falado, não invente pontuação que mude o sentido.`;
+
+  const res = await fetch(`${GEMINI_API_BASE}/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [
+        {
+          role: "user",
+          parts: [{ file_data: { file_uri: uploaded.uri, mime_type: uploaded.mimeType } }, { text: prompt }],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: TRANSCRICAO_SCHEMA,
+        maxOutputTokens: 32768,
+        temperature: 0.2,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    throw new GeminiRequestError(`Gemini retornou erro (${res.status}) ao transcrever: ${await res.text()}`);
+  }
+  const data = await res.json();
+  const text: string = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
+  try {
+    const parsed = JSON.parse(text) as { trechos?: TrechoFala[] };
+    const trechos = (parsed.trechos ?? [])
+      .map((t) => ({ inicio: Number(t.inicio) || 0, fim: Number(t.fim) || 0, texto: String(t.texto ?? "").trim() }))
+      .filter((t) => t.texto && t.fim > t.inicio);
+    return { trechos, model };
+  } catch {
+    throw new GeminiRequestError(`O Gemini respondeu fora do formato esperado na transcrição: ${text.slice(0, 200)}`);
   }
 }

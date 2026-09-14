@@ -168,3 +168,58 @@ diferente), normalmente basta:
 2. Colar o erro do `npm run build` numa conversa com o Claude (Claude Code ou
    aqui mesmo) pedindo para corrigir — é rápido de resolver com o log de erro
    em mãos.
+
+## Metadinhas do Estúdio Reels
+
+"Metadinha" é o reel em que o Augusto aparece em cima e a tela do Estúdio
+Reels ocupa a metade de baixo do quadro. Quando uma análise do Gemini fica
+pronta com o toggle **"Gerar metadinha"** ligado (padrão, em Posts e na janela
+da análise), o sistema lê o resumo, a estrutura e o frame a frame e monta o
+fluxo de telas que combina com aquele vídeo — já no formato de projeto do
+estúdio.
+
+- **Onde aparece**: na janela da análise (bloco "Metadinha no Estúdio Reels",
+  com "Abrir no Estúdio", "Baixar .json" e "Gerar de novo") e na aba
+  **Estúdio Reels**, que lista os fluxos de referência do Augusto, as
+  metadinhas geradas e os padrões aprendidos.
+- **Como o sistema aprendeu**: `npm run seed:fluxos` carrega os fluxos de
+  referência (tabela `studio_flows`, `kind = 'referencia'`) — as cenas do
+  projeto salvo dentro do estúdio e as reconstruções feitas a partir do frame
+  a frame — cada uma ligada ao vídeo em que foi usada, com a confiança da
+  ligação. Os padrões extraídos desses fluxos ficam em
+  `src/lib/studio/patterns.ts` e podem ser substituídos por um arquivo
+  `estudio-reels-padroes.md` na Biblioteca.
+- **Prévia**: as telas aparecem desenhadas (proporção 1080x960, cores do estúdio) na janela da
+  análise, na aba **Roteiros dos vídeos** — no mesmo bloco do roteiro — e na página pública
+  `/metadinha/<id>`, que é o link que o Claude manda na conversa.
+- **Grades prontas**: os modelos de semana do estúdio (Balizadores, Semana do empresário,
+  lotada, caótica, mapeada, flexível, equilibrada...) estão em `src/lib/studio/modelos.ts` e o
+  gerador pode escolher um pelo nome em vez de inventar a grade.
+- **Abrir no estúdio**: qualquer fluxo abre em
+  `/estudio-reels.html?fluxo=<id>` (o estúdio busca o projeto na API e carrega
+  como se fosse um arquivo salvo). Pelo MCP: `list_studio_flows`,
+  `get_studio_flow`, `generate_studio_flow`, `link_studio_flow` e
+  `get_studio_patterns`.
+
+## Aba Vídeo (o motor de edição)
+
+Monta o reel dentro do próprio site: o vídeo que o Augusto gravou em cima, a
+metadinha rodando embaixo, legenda automática, cortes nos silêncios e música —
+tudo numa linha do tempo, com um botão de exportar.
+
+- **Motor**: canvas + WebAudio + MediaRecorder, tudo no navegador (sem serviço
+  externo e sem licença de terceiros). As peças ficam em `src/lib/video/`:
+  `types.ts` (o projeto e a conta dos cortes), `painter.ts` (desenha o quadro —
+  é aqui que se muda o visual do vídeo), `engine.ts` (toca e grava),
+  `captions.ts` (legendas) e `silence.ts` (detecção de silêncio).
+- **Legendas**: saem da transcrição que o Gemini já gerou na análise; para um
+  arquivo novo, o botão "Gerar legendas do áudio" transcreve na hora.
+- **Cortes**: o áudio é varrido em janelas de 20 ms; silêncios acima do tempo
+  mínimo viram cortes (com folga nas pontas). Nada é apagado do arquivo — os
+  cortes vivem na linha do tempo.
+- **Exportação**: grava a linha do tempo em tempo real (mp4 quando o navegador
+  aceita, senão webm) e baixa o arquivo. Para trocar por uma exportação mais
+  rápida e sem emenda nos cortes (WebCodecs), o único lugar a mexer é
+  `MotorVideo.exportar()`.
+- **Proxy de mídia**: `/api/media-proxy` serve o arquivo do Blob pela nossa
+  origem, senão o canvas fica "sujo" e a exportação falha.

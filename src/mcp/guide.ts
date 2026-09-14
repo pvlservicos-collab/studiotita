@@ -33,6 +33,16 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
     ],
   },
   {
+    group: "Estúdio Reels (metadinhas)",
+    tools: [
+      { name: "list_studio_flows", what: "Fluxos de tela do estúdio: os reais do Augusto (referência, ligados ao vídeo em que foram usados) e os montados pelo sistema." },
+      { name: "get_studio_flow", what: "Um fluxo inteiro: cada cena com tempo, tipo, texto da tela, agenda/gráfico/sono, fala e instrução de gravação." },
+      { name: "generate_studio_flow", what: "Monta (ou refaz) a metadinha de um vídeo já analisado, no padrão do Augusto." },
+      { name: "link_studio_flow", what: "Liga um fluxo de referência ao vídeo em que ele foi usado." },
+      { name: "get_studio_patterns", what: "Os padrões aprendidos das metadinhas do Augusto (o que guia toda metadinha nova)." },
+    ],
+  },
+  {
     group: "Criar roteiro",
     tools: [
       { name: "create_script", what: "Gera um roteiro novo combinando melhores vídeos, categorias, concorrentes, assunto, trechos das aulas e cenas do Estúdio Reels (ou aleatório)." },
@@ -101,6 +111,7 @@ O app guarda os reels com as métricas da Meta, as análises do Gemini, os rotei
 COMO O APP FUNCIONA
 - Posts: sync_videos_from_meta atualiza os reels do Augusto. Cada vídeo tem colunas (views, reach, likes, comments, shares, saves) e o campo "metrics" com tudo o que a Meta informa: ${metricLegend}. Use esses números para decidir (salvamentos e compartilhamentos altos = conteúdo de valor; taxa de pulo alta = gancho fraco). get_best_posts faz o recorte "Melhores posts" por período; get_posts_report gera o relatório completo.
 - Análises: request_video_analysis manda o vídeo ao Gemini. A resposta sempre volta em: summary (resumo), transcript (transcrição), structure (engenharia reversa de marketing: cada parte com os segundos, a função, o gatilho mental, a emoção e como foi construída, mais o arco da narrativa e os aprendizados para replicar), hook (gancho: fala, texto na tela, visual, duração e técnica), frames (leitura visual frame a frame, segundo a segundo: enquadramento, gestos, cenário, todo texto que aparece na tela, inserções e o tom da voz — é a base para montar as cenas do Estúdio Reels) e categories (temas).
+- Estúdio Reels e metadinhas: "metadinha" é o reel em que o Augusto aparece em cima e a tela do Estúdio Reels ocupa a metade de baixo (agenda da semana pintada nas categorias do método, número grande, lista de atividades, conta do sono, pentágono das 168h, gráfico, mapa mental, metas). Cada análise que fica pronta já vem com a metadinha montada pelo sistema (studio_flow=false desliga): um fluxo de cenas com tempo, texto exato da tela, o que é revelado em cada etapa e a instrução de fala. Os fluxos REAIS do Augusto estão em list_studio_flows com kind="referencia", ligados ao vídeo em que foram usados — leia-os antes de propor telas. get_studio_patterns traz o que o sistema aprendeu com eles. Toda metadinha tem dois links prontos (vêm nas tools): 'ver' — a página com a prévia das telas desenhadas, que é o link para MANDAR ao usuário quando ele pedir uma metadinha na conversa — e 'abrir_no_estudio', que abre o fluxo dentro do Estúdio Reels para editar.
 - Dois tipos de roteiro: os EXTRAÍDOS dos vídeos (list_video_scripts: o que o Gemini tirou de cada vídeo analisado, do Augusto e dos concorrentes, guardados para sempre) e os GERADOS (list_scripts: criados pelo gerador, pelo Claude ou à mão). Cada roteiro gerado tem uma pontuação interna 0-100 pelos números dos vídeos de referência (ou do vídeo publicado, se estiver ligado a um).
 - Criar roteiro: create_script combina fontes (melhores vídeos do período, busca por palavra nos vídeos analisados, categorias, concorrentes, assunto, trechos das aulas) ou random=true; scenes=true pede ideias de cena do Estúdio Reels (a ferramenta de telas do Augusto: números grandes, perguntas, listas, pentágono das 168h, agenda dos Faróis, gráficos, metas, mapa mental, sono). Esses campos são sempre gerados pelo Gemini. O prompt e o modelo usados ficam gravados. Leva ~30-60s; acompanhe com get_analysis. Cada análise consome a API do Gemini: só dispare quando o usuário pedir.
 - Adequação às regras do Augusto (rules_fit): começa vazia. Preencha com save_analysis_fields quando o usuário pedir, comparando a transcrição com o método (arquivos de método e briefing da biblioteca).

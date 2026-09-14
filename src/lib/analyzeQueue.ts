@@ -5,7 +5,9 @@
 export async function analyzeQueue(
   videoIds: string[],
   onProgress: (state: { done: number; failed: number; total: number }) => void,
-  concurrency = 3
+  concurrency = 3,
+  /** monta a metadinha do Estúdio Reels junto com cada análise */
+  studioFlow = true
 ) {
   const queue = [...videoIds];
   const state = { done: 0, failed: 0, total: queue.length };
@@ -16,7 +18,7 @@ export async function analyzeQueue(
       const res = await fetch("/api/analyses", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ video_id: id, requested_by: "pedro" }),
+        body: JSON.stringify({ video_id: id, requested_by: "pedro", studio_flow: studioFlow }),
       });
       if (!res.ok) throw new Error();
       for (let i = 0; i < 100; i++) {
