@@ -13,7 +13,8 @@
  */
 import { toStudioScene, type StudioScene } from "@/lib/studio/scenes";
 import { quebrarTexto } from "@/lib/video/captions";
-import type { VideoProject } from "@/lib/video/types";
+import { cssDaFonte } from "@/lib/video/fonts";
+import { layoutEm, type TextoClip, type VideoProject } from "@/lib/video/types";
 
 const FONTE = '"Lato", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif';
 const INK = "#EDEAE5";
@@ -56,19 +57,28 @@ export function pintarQuadro(ctx: CanvasRenderingContext2D, input: QuadroInput) 
   ctx.fillStyle = projeto.layout.fundo || "#2E2E2E";
   ctx.fillRect(0, 0, L, A);
 
-  const modo = projeto.layout.modo;
-  const divisao = Math.min(0.9, Math.max(0.1, projeto.layout.divisao || 0.5));
+  const atual = layoutEm(projeto, tempoFonte);
+  const modo = atual.modo;
+  const divisao = Math.min(0.9, Math.max(0.1, atual.divisao || 0.5));
+
   const areaVideo: Retangulo =
-    modo === "metadinha" ? { x: 0, y: 0, w: L, h: A * divisao } : { x: 0, y: 0, w: L, h: A };
+    modo === "metadinha"
+      ? { x: 0, y: 0, w: L, h: A * divisao }
+      : modo === "metadinha-topo"
+      ? { x: 0, y: A * (1 - divisao), w: L, h: A * divisao }
+      : { x: 0, y: 0, w: L, h: A };
+
   const areaCena: Retangulo =
     modo === "metadinha"
       ? { x: 0, y: A * divisao, w: L, h: A * (1 - divisao) }
+      : modo === "metadinha-topo"
+      ? { x: 0, y: 0, w: L, h: A * (1 - divisao) }
       : modo === "tela"
       ? { x: 0, y: 0, w: L, h: A }
       : { x: 0, y: A * 0.58, w: L, h: A * 0.42 };
 
-  if (modo !== "tela" && video && video.readyState >= 2) {
-    desenharCobrindo(ctx, video, areaVideo);
+  if (modo !== "tela" && video && video.readyState >= 1) {
+    desenharCobrindo(ctx, video, areaVideo, projeto.layout.enquadramento);
   }
 
   const cena = cenaEm(projeto, tempoFonte);
@@ -87,6 +97,7 @@ export function pintarQuadro(ctx: CanvasRenderingContext2D, input: QuadroInput) 
     }
   }
 
+  pintarTextosDoVideo(ctx, projeto, tempoFonte);
   pintarLegenda(ctx, projeto, tempoFonte);
   ctx.restore();
 }
@@ -98,18 +109,26 @@ export function cenaEm(projeto: VideoProject, tempoFonte: number): StudioScene |
 }
 
 /** Vídeo preenchendo o retângulo, cortando o excesso (como object-fit: cover). */
-function desenharCobrindo(ctx: CanvasRenderingContext2D, video: HTMLVideoElement, r: Retangulo) {
+function desenharCobrindo(
+  ctx: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  r: Retangulo,
+  enq?: { zoom: number; dx: number; dy: number }
+) {
   const vw = video.videoWidth || 1080;
   const vh = video.videoHeight || 1920;
-  const escala = Math.max(r.w / vw, r.h / vh);
+  const zoom = Math.max(0.2, enq?.zoom ?? 1);
+  const escala = Math.max(r.w / vw, r.h / vh) * zoom;
   const w = vw * escala;
   const h = vh * escala;
+  const desX = (enq?.dx ?? 0) * r.w;
+  const desY = (enq?.dy ?? 0) * r.h;
   ctx.save();
   ctx.beginPath();
   ctx.rect(r.x, r.y, r.w, r.h);
   ctx.clip();
   try {
-    ctx.drawImage(video, r.x + (r.w - w) / 2, r.y + (r.h - h) / 2, w, h);
+    ctx.drawImage(video, r.x + (r.w - w) / 2 + desX, r.y + (r.h - h) / 2 + desY, w, h);
   } catch {
     // quadro ainda não disponível: deixa o fundo
   }
@@ -432,7 +451,7 @@ export function pintarLegenda(ctx: CanvasRenderingContext2D, projeto: VideoProje
       : projeto.altura * (1 - e.margem) - alturaTotal;
 
   ctx.save();
-  ctx.font = `700 ${tam}px ${FONTE}`;
+  ctx.font = `700 ${tam}px ${cssDaFonte(e.fonte)}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
 
@@ -453,6 +472,67 @@ export function pintarLegenda(ctx: CanvasRenderingContext2D, projeto: VideoProje
     }
     ctx.fillStyle = e.cor;
     ctx.fillText(linha, cx, ly);
+  });
+  ctx.restore();
+}
+
+// -------------------------------------------------------- textos na tela
+
+/** Os textos soltos (chamada, frase de efeito) que estão no ar neste segundo. */
+export function pintarTextosDoVideo(ctx: CanvasRenderingContext2D, projeto: VideoProject, tempoFonte: number) {
+  for (const t of projeto.textos ?? []) {
+    if (tempoFonte < t.inicio || tempoFonte >= t.fim) continue;
+    pintarTexto(ctx, t, projeto.largura, projeto.altura);
+  }
+}
+
+/** Um texto na tela, com a fonte, a caixa e o contorno escolhidos. */
+export function pintarTexto(ctx: CanvasRenderingContext2D, t: TextoClip, L: number, A: number) {
+  const tam = t.tamanho;
+  const alturaLinha = tam * 1.22;
+  ctx.save();
+  ctx.font = `${t.italico ? "italic " : ""}${t.negrito ? 700 : 400} ${tam}px ${cssDaFonte(t.fonte)}`;
+  ctx.textAlign = t.alinhamento;
+  ctx.textBaseline = "top";
+
+  // quebra pelo espaço disponível, respeitando as quebras que a pessoa digitou
+  const larguraMax = Math.max(80, (t.largura || 0.8) * L);
+  const linhas: string[] = [];
+  for (const bruta of String(t.texto ?? "").split("\n")) {
+    let atual = "";
+    for (const palavra of bruta.split(/\s+/).filter(Boolean)) {
+      const teste = atual ? `${atual} ${palavra}` : palavra;
+      if (ctx.measureText(teste).width <= larguraMax || !atual) atual = teste;
+      else {
+        linhas.push(atual);
+        atual = palavra;
+      }
+    }
+    linhas.push(atual);
+  }
+
+  const alturaTotal = alturaLinha * linhas.length;
+  const cx = t.x * L;
+  const topo = t.y * A - alturaTotal / 2;
+
+  if (t.fundo && t.fundo !== "transparent") {
+    const larg = Math.max(...linhas.map((l) => ctx.measureText(l).width));
+    const x0 = t.alinhamento === "center" ? cx - larg / 2 : t.alinhamento === "right" ? cx - larg : cx;
+    arredondado(ctx, x0 - tam * 0.4, topo - tam * 0.25, larg + tam * 0.8, alturaTotal + tam * 0.5, tam * 0.22);
+    ctx.fillStyle = t.fundo;
+    ctx.fill();
+  }
+
+  linhas.forEach((linha, i) => {
+    const y = topo + i * alturaLinha;
+    if (t.contorno) {
+      ctx.lineWidth = Math.max(3, tam * 0.1);
+      ctx.strokeStyle = "rgba(0,0,0,.85)";
+      ctx.lineJoin = "round";
+      ctx.strokeText(linha, cx, y);
+    }
+    ctx.fillStyle = t.cor;
+    ctx.fillText(linha, cx, y);
   });
   ctx.restore();
 }

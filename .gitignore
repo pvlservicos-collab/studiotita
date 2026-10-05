@@ -35,3 +35,8 @@ Thumbs.db
 
 # cópia de trabalho do Estúdio Reels (a versão publicada fica em public/estudio-reels.html)
 /estudio-reels.html
+.vercel
+
+# cópias de ambiente e credenciais nunca versionadas
+*.bak
+.env.check

@@ -3,6 +3,7 @@ import "./globals.css";
 import Link from "next/link";
 import TopNav from "@/components/TopNav";
 import { LEGAL, LEGAL_LINKS } from "@/lib/legal";
+import { googleFontsHref } from "@/lib/video/fonts";
 
 export const metadata: Metadata = {
   title: "Videoteca IG — Insights",
@@ -16,6 +17,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
+      <head>
+        {/* fontes usadas nos vídeos (legendas e textos na tela) */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href={googleFontsHref()} />
+      </head>
       <body className="font-sans antialiased">
         <div className="mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 pb-16 pt-6 sm:px-8">
           <TopNav />

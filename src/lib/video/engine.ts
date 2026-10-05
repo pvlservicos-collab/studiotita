@@ -12,6 +12,7 @@
  * a montagem do quadro continua a mesma.
  */
 import { pintarQuadro } from "@/lib/video/painter";
+import { garantirFontes } from "@/lib/video/fonts";
 import { duracaoFinal, paraFonte, segmentoEm, segmentos, type VideoProject } from "@/lib/video/types";
 
 export interface MotorOpcoes {
@@ -67,6 +68,10 @@ export class MotorVideo {
     this.video.style.cssText = "position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
     document.body.appendChild(this.video);
     if (projeto.fonte?.url) this.video.src = urlDeMidia(projeto.fonte.url);
+
+    // as fontes precisam estar carregadas antes de desenhar, senao a previa
+    // (e o arquivo exportado) saem com a fonte de sistema
+    garantirFontes().then(() => this.desenhar());
   }
 
   get duracao() {
@@ -80,8 +85,9 @@ export class MotorVideo {
   atualizarProjeto(projeto: VideoProject) {
     const trocouFonte = projeto.fonte?.url !== this.projeto.fonte?.url;
     this.projeto = projeto;
-    this.canvas.width = projeto.largura;
-    this.canvas.height = projeto.altura;
+    // trocar width/height limpa o canvas: só mexe quando muda de verdade
+    if (this.canvas.width !== projeto.largura) this.canvas.width = projeto.largura;
+    if (this.canvas.height !== projeto.altura) this.canvas.height = projeto.altura;
     if (trocouFonte && projeto.fonte?.url) this.video.src = urlDeMidia(projeto.fonte.url);
     if (this.ganhoFonte) this.ganhoFonte.gain.value = projeto.volumeFonte ?? 1;
     if (this.ganhoMusica) this.ganhoMusica.gain.value = projeto.musica?.volume ?? 0.25;
@@ -249,6 +255,7 @@ export class MotorVideo {
     if (!this.projeto.fonte?.url) throw new Error("Envie o vídeo do Augusto antes de exportar.");
     if (!this.duracao) throw new Error("O projeto está sem duração.");
 
+    await garantirFontes();
     await this.prepararAudio(true);
     await this.carregarMusica().catch(() => undefined);
 

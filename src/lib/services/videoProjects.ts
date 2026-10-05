@@ -21,6 +21,11 @@ export interface VideoProjectRow {
   duration: number | null;
   project: VideoProject;
   export_url: string | null;
+  render_status?: "parado" | "na_fila" | "renderizando" | "pronto" | "erro";
+  render_progress?: number | string;
+  render_etapa?: string | null;
+  render_error?: string | null;
+  render_ms?: number | null;
   status: "rascunho" | "pronto" | "exportado";
   created_by: string | null;
   created_at: string;
@@ -32,7 +37,8 @@ export interface VideoProjectRow {
 export async function listVideoProjects(limit = 50) {
   return query<VideoProjectRow>(
     `select p.id, p.title, p.flow_id, p.script_id, p.video_id, p.source_url, p.source_name, p.duration,
-            p.export_url, p.status, p.created_by, p.created_at, p.updated_at,
+            p.export_url, p.status, p.render_status, p.render_progress, p.render_etapa, p.render_error, p.render_ms,
+            p.created_by, p.created_at, p.updated_at,
             f.title as flow_title
      from video_projects p
      left join studio_flows f on f.id = p.flow_id
@@ -51,7 +57,16 @@ export async function getVideoProject(id: string) {
 
 export async function updateVideoProject(
   id: string,
-  input: { title?: string; project?: VideoProject; status?: string; export_url?: string | null; source_url?: string | null; source_name?: string | null; duration?: number | null }
+  input: {
+    title?: string;
+    project?: VideoProject;
+    status?: string;
+    export_url?: string | null;
+    source_url?: string | null;
+    source_name?: string | null;
+    duration?: number | null;
+    flow_id?: string | null;
+  }
 ) {
   const campos: [string, unknown][] = [
     ["title", input.title],
@@ -61,6 +76,7 @@ export async function updateVideoProject(
     ["source_url", input.source_url],
     ["source_name", input.source_name],
     ["duration", input.duration],
+    ["flow_id", input.flow_id],
   ];
   const sets: string[] = [];
   const params: unknown[] = [id];
@@ -92,6 +108,8 @@ export async function createVideoProject(input: {
   source_name?: string | null;
   duration?: number | null;
   created_by?: string | null;
+  /** só gera legendas da transcrição quando pedido */
+  com_legendas?: boolean;
 }): Promise<VideoProjectRow> {
   const flow = input.flow_id ? await getStudioFlow(input.flow_id) : null;
   const titulo = input.title?.trim() || flow?.title || "Vídeo novo";
@@ -111,9 +129,11 @@ export async function createVideoProject(input: {
     projeto.telas = telasDoFluxo((flow.scenes as StudioScene[]) ?? [], Number(input.duration ?? 0));
   }
 
-  // legendas a partir da transcrição já existente do vídeo escolhido
+  // As legendas NÃO vêm por padrão: só entram quando o usuário mandar gerar
+  // (no editor, botão "Gerar legendas"), para não encher a linha do tempo de
+  // um texto que talvez nem sirva para este vídeo.
   const videoId = input.video_id ?? flow?.video_id ?? null;
-  if (videoId) {
+  if (input.com_legendas && videoId) {
     const a = await queryOne<{ transcript: string | null }>(
       `select transcript from analyses where video_id = $1 and status = 'done' order by requested_at desc limit 1`,
       [videoId]
@@ -140,4 +160,49 @@ export async function createVideoProject(input: {
   );
   if (!row) throw new Error("Falha ao criar o projeto de vídeo.");
   return row;
+}
+
+/**
+ * Traz um vídeo de fora (link que o Augusto mandou) para o projeto: copia o
+ * arquivo para o nosso Blob, mede a duração e grava no projeto.
+ * É por aqui que o Claude dele manda o vídeo sem passar pelo site.
+ */
+export async function anexarVideoPorUrl(id: string, url: string, nome?: string | null) {
+  const { put } = await import("@vercel/blob");
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { duracaoDoArquivo } = await import("@/lib/video/render/probe");
+
+  const linha = await getVideoProject(id);
+  if (!linha) throw new VideoProjectInputError(`Projeto ${id} não encontrado.`);
+
+  const res = await fetch(url);
+  if (!res.ok) throw new VideoProjectInputError(`Não consegui baixar o vídeo em ${url} (status ${res.status}).`);
+  const bytes = Buffer.from(await res.arrayBuffer());
+  const arquivo = nome?.trim() || url.split("/").pop()?.split("?")[0] || "video.mp4";
+
+  const pasta = await fs.mkdtemp(path.join(os.tmpdir(), "videoteca-in-"));
+  const temporario = path.join(pasta, arquivo);
+  await fs.writeFile(temporario, bytes);
+  const duracao = await duracaoDoArquivo(temporario);
+  await fs.rm(pasta, { recursive: true, force: true }).catch(() => undefined);
+
+  const blob = await put(`videos-brutos/${id}-${arquivo}`, bytes, {
+    access: "public",
+    addRandomSuffix: true,
+    contentType: res.headers.get("content-type") || "video/mp4",
+  });
+
+  const projeto: VideoProject = {
+    ...linha.project,
+    fonte: { url: blob.url, nome: arquivo, duracao, largura: null, altura: null },
+  };
+  // as telas vão até onde o vídeo vai
+  if (!projeto.telas?.length && linha.flow_id) {
+    const flow = await getStudioFlow(linha.flow_id);
+    if (flow) projeto.telas = telasDoFluxo((flow.scenes as StudioScene[]) ?? [], duracao);
+  }
+
+  return updateVideoProject(id, { project: projeto, source_url: blob.url, source_name: arquivo, duration: duracao });
 }

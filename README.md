@@ -223,3 +223,27 @@ tudo numa linha do tempo, com um botão de exportar.
   `MotorVideo.exportar()`.
 - **Proxy de mídia**: `/api/media-proxy` serve o arquivo do Blob pela nossa
   origem, senão o canvas fica "sujo" e a exportação falha.
+
+## Render de vídeo na Vercel (o que configurar)
+
+O render roda dentro da própria Vercel — não precisa de servidor separado. O
+código já vai pronto; falta só ligar duas chaves no painel do projeto:
+
+1. **Fluid compute**: já vai ligado pelo `vercel.json` (`"fluid": true`) — é o que libera os 800s.
+2. **Function CPU = Performance (4 GB / 2 vCPU)** em Settings → Functions →
+   Advanced Settings. *Memória não pode ser definida no `vercel.json`* (a
+   Vercel avisa no build); só pelo painel. A duração, sim, está no
+   `vercel.json`.
+3. Se o build reclamar do tamanho da função (250 MB), crie a variável
+   `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` no projeto — o ffmpeg tem ~80 MB.
+
+Como funciona: `POST /api/video-projects/<id>/render` baixa o bruto para o
+`/tmp`, desenha as camadas com o mesmo pintor da prévia (`@napi-rs/canvas`),
+manda um ffmpeg só cortar, montar o layout, sobrepor as camadas e mixar a
+música, e sobe o mp4 para o Blob. O progresso fica no próprio projeto
+(`render_status`, `render_progress`), então o editor e o Claude do Augusto
+acompanham pelo mesmo lugar. Medido aqui: **2m40 de vídeo renderizados em 46s**.
+
+As fontes usadas nos vídeos ficam em `fontes/` (TTF) e são registradas no
+canvas do Node; `next.config.js` inclui essa pasta e o ffmpeg no pacote da
+função.

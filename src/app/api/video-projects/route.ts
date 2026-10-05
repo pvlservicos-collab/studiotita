@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
       source_name: body?.source_name ?? null,
       duration: body?.duration ?? null,
       created_by: body?.created_by ?? "pedro",
+      com_legendas: body?.com_legendas === true,
     });
     return NextResponse.json({ project }, { status: 201 });
   } catch (err) {

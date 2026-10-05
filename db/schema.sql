@@ -339,3 +339,12 @@ create index if not exists idx_video_projects_created on video_projects (created
 drop trigger if exists trg_video_projects_updated_at on video_projects;
 create trigger trg_video_projects_updated_at before update on video_projects
   for each row execute procedure set_updated_at();
+
+-- v7: render no servidor (a aba Vídeo exporta sem depender do navegador)
+alter table video_projects add column if not exists render_status   text not null default 'parado'
+  check (render_status in ('parado', 'na_fila', 'renderizando', 'pronto', 'erro'));
+alter table video_projects add column if not exists render_progress numeric not null default 0;
+alter table video_projects add column if not exists render_etapa    text;
+alter table video_projects add column if not exists render_error    text;
+alter table video_projects add column if not exists render_started_at timestamptz;
+alter table video_projects add column if not exists render_ms       integer;

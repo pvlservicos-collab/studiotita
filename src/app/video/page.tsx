@@ -77,6 +77,8 @@ export default function VideoPage() {
           setAberto(null);
           carregar();
         }}
+        onAbrir={(outro) => setAberto(outro)}
+        onNovo={() => criar(null, "Vídeo novo")}
       />
     );
   }
@@ -92,10 +94,10 @@ export default function VideoPage() {
       {erro && <p className="text-sm text-rose-600">{erro}</p>}
 
       <GlassCard strong className="space-y-3 p-4">
-        <h2 className="text-sm font-semibold text-ink-900">Começar um vídeo novo</h2>
+        <h2 className="text-sm font-semibold text-ink-900">Novo projeto</h2>
         <p className="text-xs text-ink-500">
-          Escolha a metadinha que vai rodar na tela. As telas entram na linha do tempo nos tempos do fluxo e, se o vídeo de
-          referência já tiver transcrição, as legendas também já vêm prontas. O arquivo gravado você envia dentro do editor.
+          Escolha a metadinha que vai rodar na tela: as telas entram na linha do tempo nos tempos do fluxo. O arquivo gravado
+          você envia dentro do editor, e as legendas só são geradas quando você mandar (botão “Gerar legendas”).
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -128,6 +130,8 @@ export default function VideoPage() {
           ))}
         </div>
       </GlassCard>
+
+      <h2 className="text-sm font-semibold text-ink-900">Meus vídeos</h2>
 
       {carregando ? (
         <p className="text-sm text-ink-400">Carregando...</p>

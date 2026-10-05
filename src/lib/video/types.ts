@@ -11,7 +11,20 @@
  */
 import type { StudioScene } from "@/lib/studio/scenes";
 
-export type LayoutModo = "metadinha" | "cheio" | "tela";
+/**
+ * metadinha      = vídeo em cima, tela do estúdio embaixo (o padrão dele)
+ * metadinha-topo = o contrário: a tela em cima e o vídeo embaixo
+ * cheio          = vídeo ocupando o quadro, com a tela num card embaixo
+ * tela           = só a tela do estúdio (sem imagem do vídeo)
+ */
+export type LayoutModo = "metadinha" | "metadinha-topo" | "cheio" | "tela";
+
+export const LAYOUTS: { id: LayoutModo; nome: string; dica: string }[] = [
+  { id: "metadinha", nome: "Metadinha (vídeo em cima)", dica: "o padrão: ele em cima, a tela do estúdio embaixo" },
+  { id: "metadinha-topo", nome: "Metadinha invertida (tela em cima)", dica: "a tela em cima e ele embaixo" },
+  { id: "cheio", nome: "Vídeo completo", dica: "o vídeo ocupa o quadro todo, com a tela num card embaixo" },
+  { id: "tela", nome: "Só a tela do estúdio", dica: "sem a imagem do vídeo" },
+];
 
 export interface VideoFonte {
   url: string;
@@ -54,7 +67,33 @@ export interface Musica {
   fadeOut: number;
 }
 
+/** Texto solto na tela (a chamada do vídeo, um aviso, uma frase de efeito). */
+export interface TextoClip {
+  id: string;
+  inicio: number;
+  fim: number;
+  texto: string;
+  /** id da fonte (ver src/lib/video/fonts.ts) */
+  fonte: string;
+  /** altura da fonte no quadro de 1080x1920 */
+  tamanho: number;
+  cor: string;
+  /** posição do centro do texto, em fração do quadro */
+  x: number;
+  y: number;
+  alinhamento: "left" | "center" | "right";
+  negrito: boolean;
+  italico: boolean;
+  /** caixa atrás do texto ("transparent" = sem caixa) */
+  fundo: string;
+  contorno: boolean;
+  /** largura máxima da caixa de texto, em fração do quadro */
+  largura: number;
+}
+
 export interface EstiloLegenda {
+  /** id da fonte (ver src/lib/video/fonts.ts) */
+  fonte: string;
   /** altura da fonte em px, medida no quadro de 1080x1920 */
   tamanho: number;
   cor: string;
@@ -66,6 +105,23 @@ export interface EstiloLegenda {
   margem: number;
   /** máximo de caracteres por linha */
   largura: number;
+}
+
+/** Como o vídeo é encaixado na área dele (zoom e deslocamento). */
+export interface Enquadramento {
+  zoom: number;
+  /** deslocamento em fração da área (-0.5 a 0.5) */
+  dx: number;
+  dy: number;
+}
+
+/** Troca de layout no meio do vídeo (tempo do vídeo original). */
+export interface LayoutClip {
+  id: string;
+  inicio: number;
+  fim: number;
+  modo: LayoutModo;
+  divisao?: number;
 }
 
 export interface VideoProject {
@@ -80,8 +136,12 @@ export interface VideoProject {
     /** fração da altura ocupada pelo vídeo no modo metadinha */
     divisao: number;
     fundo: string;
+    enquadramento?: Enquadramento;
   };
+  /** trechos com layout diferente do geral */
+  layoutClips?: LayoutClip[];
   telas: TelaClip[];
+  textos: TextoClip[];
   legendas: LegendaClip[];
   legendaEstilo: EstiloLegenda;
   cortes: Corte[];
@@ -90,6 +150,7 @@ export interface VideoProject {
 }
 
 export const ESTILO_LEGENDA_PADRAO: EstiloLegenda = {
+  fonte: "augusto",
   tamanho: 54,
   cor: "#FFFFFF",
   fundo: "rgba(0,0,0,0.55)",
@@ -108,8 +169,10 @@ export function projetoVazio(titulo = "Vídeo novo"): VideoProject {
     altura: 1920,
     fps: 30,
     fonte: null,
-    layout: { modo: "metadinha", divisao: 0.5, fundo: "#2E2E2E" },
+    layout: { modo: "metadinha", divisao: 0.5, fundo: "#2E2E2E", enquadramento: { zoom: 1, dx: 0, dy: 0 } },
+    layoutClips: [],
     telas: [],
+    textos: [],
     legendas: [],
     legendaEstilo: { ...ESTILO_LEGENDA_PADRAO },
     cortes: [],
@@ -221,4 +284,34 @@ export function paraSegundos(valor: string | number | undefined, padrao = 0): nu
 
 export function novoId() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+/** O layout que vale neste segundo (uma troca no meio do vídeo manda no geral). */
+export function layoutEm(p: VideoProject, tempoFonte: number): { modo: LayoutModo; divisao: number } {
+  const clip = (p.layoutClips ?? []).find((c) => tempoFonte >= c.inicio && tempoFonte < c.fim);
+  return {
+    modo: clip?.modo ?? p.layout.modo,
+    divisao: clip?.divisao ?? p.layout.divisao ?? 0.5,
+  };
+}
+
+/** Um texto novo, já no estilo das chamadas do Augusto. */
+export function textoPadrao(inicio: number, fim: number, texto = "Escreva aqui"): TextoClip {
+  return {
+    id: novoId(),
+    inicio,
+    fim,
+    texto,
+    fonte: "augusto",
+    tamanho: 76,
+    cor: "#FFFFFF",
+    x: 0.5,
+    y: 0.16,
+    alinhamento: "center",
+    negrito: false,
+    italico: false,
+    fundo: "transparent",
+    contorno: false,
+    largura: 0.8,
+  };
 }
