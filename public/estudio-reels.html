@@ -1449,7 +1449,7 @@ document.body && (document.body.style.overscrollBehavior = 'none');
 <div id="tamMenu">
   <span class="rot-menu">tamanho do quadro</span>
   <div class="t-lin"><span>tamanho</span><b id="tamV">100%</b></div>
-  <input type="range" min="50" max="170" step="1" value="100" id="tamEscala">
+  <input type="range" min="30" max="170" step="1" value="50" id="tamEscala">
   <div class="t-lin"><span>altura</span><b id="altV">960</b></div>
   <input type="range" min="520" max="1500" step="10" value="960" id="tamAltura">
   <button class="b" id="tamPadrao">voltar ao padrão</button>
@@ -9205,17 +9205,26 @@ mostrar(0);
   const rAltura = g('tamAltura');
   if(!painel || !botao || !rEscala || !rAltura) return;
 
-  const PADRAO = { escala: 100, altura: 960 };
+  const PADRAO = { escala: 50, altura: 960 };
   const raiz = document.documentElement;
   let valor = Object.assign({}, PADRAO);
 
+  // o padrão mudou para metade do tamanho: quem já tinha um valor guardado
+  // recebe o novo uma vez (depois disso a escolha dele volta a mandar)
+  const VERSAO_PADRAO = '2';
   try{
+    const versao = localStorage.getItem('estudio-tamanho-v');
     const salvo = JSON.parse(localStorage.getItem('estudio-tamanho') || 'null');
-    if(salvo && salvo.escala && salvo.altura) valor = salvo;
+    if(versao !== VERSAO_PADRAO){
+      localStorage.setItem('estudio-tamanho-v', VERSAO_PADRAO);
+      localStorage.removeItem('estudio-tamanho');
+    } else if(salvo && salvo.escala && salvo.altura){
+      valor = salvo;
+    }
   }catch(e){}
 
   function aplicar(guardar){
-    valor.escala = Math.min(170, Math.max(50, +valor.escala || 100));
+    valor.escala = Math.min(170, Math.max(30, +valor.escala || 50));
     valor.altura = Math.min(1500, Math.max(520, +valor.altura || 960));
     raiz.style.setProperty('--escala', (valor.escala / 100).toFixed(3));
     raiz.style.setProperty('--altq', String(valor.altura));
