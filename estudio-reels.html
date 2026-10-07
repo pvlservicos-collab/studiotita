@@ -2,7 +2,9 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!-- o pinça-para-ampliar fica LIBERADO: no tablet e no notebook a pessoa
+     aproxima e afasta a cena com os dedos. viewport-fit=cover usa a tela toda -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Estúdio Reels</title>
 <style>
   :root{
@@ -34,15 +36,40 @@
      assim nada de interface cai dentro do retângulo que vai virar vídeo */
   /* O quadro fica no CENTRO EXATO da tela gravada. Assim, no editor de vídeo, a
      máscara é só centralizar e ajustar o tamanho. Os menus flutuam por cima. */
+  /* touch-action:pinch-zoom = um dedo continua arrastando os blocos (o app cuida),
+     dois dedos ampliam/afastam no navegador */
   #palco{position:fixed;inset:0;display:flex;
-         align-items:center;justify-content:center;touch-action:none}
+         align-items:center;justify-content:center;touch-action:pinch-zoom}
+  @supports (height:100dvh){
+    /* a altura segue o que está REALMENTE visível, não o viewport "grande" */
+    #palco{height:100dvh;bottom:auto}
+    html,body{height:100dvh}
+  }
+  /* ---------- tamanho da cena: sempre inteira na tela ----------
+     --faixa = espaço livre à esquerda para o menu não cair dentro do quadro
+     --folga = respiro em cima e embaixo, para a moldura branca do corte
+               aparecer inteira em qualquer tela.
+     A conta usa dvh (altura REAL visível): com vh, a barra do navegador do
+     tablet/celular entra na conta e a cena vazava para fora da tela. */
+  :root{ --faixa:250px; --folga:56px }
+  @media (max-width:1180px){ :root{ --faixa:170px; --folga:48px } }
+  @media (max-width:900px) { :root{ --faixa:110px; --folga:40px } }
+  @media (max-width:640px) { :root{ --faixa:16px;  --folga:32px } }
+  @media (max-height:600px){ :root{ --folga:24px } }
+
   .cena{
     position:relative;background:var(--bg);
     /* proporção da metade de baixo do enquadramento do Instagram */
     aspect-ratio:1080 / 960;
-    width:min(calc(100vw - 250px), calc(94vh * 1080 / 960));
-    max-height:94vh;
+    width:min(calc(100vw - var(--faixa)), calc((100vh - var(--folga)) * 1080 / 960));
+    max-height:calc(100vh - var(--folga));
     overflow:hidden;
+  }
+  @supports (height:100dvh){
+    .cena{
+      width:min(calc(100vw - var(--faixa)), calc((100dvh - var(--folga)) * 1080 / 960));
+      max-height:calc(100dvh - var(--folga));
+    }
   }
 
   /* zonas que o Instagram cobre com interface */
@@ -96,7 +123,7 @@
     border-top:1px solid var(--linha);margin-top:6px}
   .md-volta:hover{opacity:1;color:#EDEAE5}
   /* iPad: nenhum arraste dentro da cena vira rolagem ou gesto do sistema */
-  #util, .grupoCx{touch-action:none}
+  #util, .grupoCx{touch-action:pinch-zoom}
   /* caixa em volta de UM bloco: o miolo deixa o toque passar (editar o
      texto), só as alças e a bolinha pegam */
   #grupoCx.solo{pointer-events:none}
@@ -236,7 +263,7 @@
   .mapaw{position:absolute;left:var(--seguro);top:var(--seguro-n);
     right:var(--seguro-si);bottom:var(--seguro-si);z-index:5}
   .mapaw #mapa{position:absolute;inset:0}
-  #mapa{touch-action:none}
+  #mapa{touch-action:pinch-zoom}
   #mapaSvg{position:absolute;inset:0;width:100%;height:100%}
   #mapaSvg path.mp-e{fill:none;stroke:#8474EB;stroke-width:2;stroke-linecap:round;
     opacity:.92;transition:opacity .5s}
@@ -561,7 +588,7 @@
   
   #pentagono [contenteditable="true"]{-webkit-user-select:text;user-select:text}
   #pentagono /* só o losango precisa disso. Os sliders ficam com o comportamento nativo do Safari, #pentagono que já funcionava bem com a Apple Pencil. */
-  svg, #pentagono .ponta, #pentagono #pontas{touch-action:none;-webkit-user-select:none;user-select:none;}
+  svg, #pentagono .ponta, #pentagono #pontas{touch-action:pinch-zoom;-webkit-user-select:none;user-select:none;}
   #pentagono /* topo */
   .topbar{margin-bottom:6px}
   #pentagono .titulo{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim)}
@@ -1025,7 +1052,7 @@
   /* ---------- camada de caneta ---------- */
   /* a caneta fica acima de tudo dentro da cena: assim o traço passa por cima do
      texto, das imagens e dos widgets, sem a área da cena roubar o gesto */
-  #tinta{position:absolute;inset:0;touch-action:none;z-index:30}
+  #tinta{position:absolute;inset:0;touch-action:pinch-zoom;z-index:30}
 
   /* ---------- barra de controle, fora do quadro gravado ---------- */
   /* canto inferior esquerdo, na faixa do menu: nunca invade o quadro gravado */
