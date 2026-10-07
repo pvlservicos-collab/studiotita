@@ -40,6 +40,9 @@
      dois dedos ampliam/afastam no navegador */
   #palco{position:fixed;inset:0;display:flex;
          align-items:center;justify-content:center;touch-action:pinch-zoom}
+  /* com o quadro maior que a tela dá para arrastar até a parte escondida;
+     "safe" evita o canto cortado que o flex centralizado costuma causar */
+  #palco{overflow:auto;align-items:safe center;justify-content:safe center}
   @supports (height:100dvh){
     /* a altura segue o que está REALMENTE visível, não o viewport "grande" */
     #palco{height:100dvh;bottom:auto}
@@ -51,7 +54,13 @@
                aparecer inteira em qualquer tela.
      A conta usa dvh (altura REAL visível): com vh, a barra do navegador do
      tablet/celular entra na conta e a cena vazava para fora da tela. */
-  :root{ --faixa:250px; --folga:56px }
+  :root{
+    --faixa:250px; --folga:56px;
+    /* reguas do menu "tamanho": --escala aumenta o quadro todo e --altq muda
+       a altura dele (1080 x altq). Valem em qualquer aparelho e ficam
+       guardadas no navegador. */
+    --escala:1; --altq:960;
+  }
   @media (max-width:1180px){ :root{ --faixa:170px; --folga:48px } }
   @media (max-width:900px) { :root{ --faixa:110px; --folga:40px } }
   @media (max-width:640px) { :root{ --faixa:16px;  --folga:32px } }
@@ -59,16 +68,18 @@
 
   .cena{
     position:relative;background:var(--bg);
-    /* proporção da metade de baixo do enquadramento do Instagram */
-    aspect-ratio:1080 / 960;
-    width:min(calc(100vw - var(--faixa)), calc((100vh - var(--folga)) * 1080 / 960));
-    max-height:calc(100vh - var(--folga));
+    /* proporção do quadro: 1080 de largura pela altura escolhida na régua
+       (960 = a metade de baixo do enquadramento do Instagram) */
+    aspect-ratio:1080 / var(--altq);
+    width:min(calc((100vw - var(--faixa)) * var(--escala)), calc((100vh - var(--folga)) * var(--escala) * 1080 / var(--altq)));
+    max-height:calc((100vh - var(--folga)) * var(--escala));
     overflow:hidden;
+    flex:0 0 auto;
   }
   @supports (height:100dvh){
     .cena{
-      width:min(calc(100vw - var(--faixa)), calc((100dvh - var(--folga)) * 1080 / 960));
-      max-height:calc(100dvh - var(--folga));
+      width:min(calc((100vw - var(--faixa)) * var(--escala)), calc((100dvh - var(--folga)) * var(--escala) * 1080 / var(--altq)));
+      max-height:calc((100dvh - var(--folga)) * var(--escala));
     }
   }
 
@@ -946,7 +957,7 @@
   }
   .im-item:hover{background:rgba(237,234,229,.06)}
   .im-item.on{border-color:var(--ouro)}
-  .im-mini{aspect-ratio:1080 / 960;position:relative;overflow:hidden}
+  .im-mini{aspect-ratio:1080 / var(--altq);position:relative;overflow:hidden}
   .im-mini .escala{position:absolute;top:0;left:0;transform-origin:top left}
   .im-pe{
     display:flex;align-items:center;justify-content:space-between;gap:8px;
@@ -974,6 +985,17 @@
   #salvarNome:focus{background:rgba(224,140,58,.10)}
   .sv-nav{display:flex;gap:6px}
   .sv-nav .b{flex:1;padding:6px 0}
+
+  #tamMenu{
+    position:fixed;left:10px;bottom:10px;
+    display:none;flex-direction:column;gap:3px;z-index:60;width:150px;
+    background:var(--painel);border:0;border-radius:var(--painel-raio);
+    padding:10px;backdrop-filter:blur(20px) saturate(1.1);box-shadow:0 10px 40px rgba(0,0,0,.34);
+  }
+  #tamMenu.on{display:flex}
+  #tamMenu input[type=range]{width:100%;accent-color:var(--guia);margin-bottom:4px}
+  #tamMenu .t-lin{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:var(--dim)}
+  #tamMenu .t-lin b{color:var(--ink);font-weight:400}
 
   #zonaMenu{
     position:fixed;left:10px;bottom:10px;
@@ -1224,7 +1246,7 @@
   }
   .linha:last-of-type{border-bottom:none}
   .mini{
-    aspect-ratio:1080 / 960;background:#272727;border:1px solid var(--linha);
+    aspect-ratio:1080 / var(--altq);background:#272727;border:1px solid var(--linha);
     position:relative;overflow:hidden;cursor:pointer;
   }
   .mini .escala{position:absolute;top:0;left:0;transform-origin:top left;pointer-events:none}
@@ -1422,6 +1444,15 @@ document.body && (document.body.style.overscrollBehavior = 'none');
   <input type="range" min="0" max="20" step="0.1" id="zN">
   <button class="b" id="zCopiar">mostrar valores</button>
   <input type="text" id="zSaida" readonly>
+</div>
+
+<div id="tamMenu">
+  <span class="rot-menu">tamanho do quadro</span>
+  <div class="t-lin"><span>tamanho</span><b id="tamV">100%</b></div>
+  <input type="range" min="50" max="170" step="1" value="100" id="tamEscala">
+  <div class="t-lin"><span>altura</span><b id="altV">960</b></div>
+  <input type="range" min="520" max="1500" step="10" value="960" id="tamAltura">
+  <button class="b" id="tamPadrao">voltar ao padrão</button>
 </div>
 
 <div id="txtMenu">
@@ -1788,6 +1819,7 @@ document.body && (document.body.style.overscrollBehavior = 'none');
     <span class="rot-menu">exibição</span>
     <button class="b on" id="bCorte">corte</button>
     <button class="b" id="bGuias">quadro</button>
+    <button class="b" id="bTamanho" title="muda o tamanho e a altura do quadro branco">tamanho</button>
     <button class="b" id="bModo">roteiro</button>
   </div>
 
@@ -8282,6 +8314,67 @@ mostrar(0);
     avisar('Fluxo da Videoteca: ' + CENAS.length + ' cenas. Salvar baixa o arquivo.');
   }catch(e){ avisar('Nao deu para abrir o fluxo da Videoteca'); }
 })();
+})();
+
+
+/* ===== régua do tamanho do quadro =====
+   Duas medidas, guardadas no navegador: --escala (o quadro inteiro aumenta ou
+   diminui) e --altq (a altura do quadro, 1080 x altq). Depois de mexer, um
+   evento de resize faz os widgets (agenda, sono, gráfico, pentágono) se
+   reencaixarem sozinhos — é o mesmo caminho de quando a janela muda. */
+(function(){
+  const g = id => document.getElementById(id);
+  const painel = g('tamMenu');
+  const botao = g('bTamanho');
+  const rEscala = g('tamEscala');
+  const rAltura = g('tamAltura');
+  if(!painel || !botao || !rEscala || !rAltura) return;
+
+  const PADRAO = { escala: 100, altura: 960 };
+  const raiz = document.documentElement;
+  let valor = Object.assign({}, PADRAO);
+
+  try{
+    const salvo = JSON.parse(localStorage.getItem('estudio-tamanho') || 'null');
+    if(salvo && salvo.escala && salvo.altura) valor = salvo;
+  }catch(e){}
+
+  function aplicar(guardar){
+    valor.escala = Math.min(170, Math.max(50, +valor.escala || 100));
+    valor.altura = Math.min(1500, Math.max(520, +valor.altura || 960));
+    raiz.style.setProperty('--escala', (valor.escala / 100).toFixed(3));
+    raiz.style.setProperty('--altq', String(valor.altura));
+    rEscala.value = valor.escala;
+    rAltura.value = valor.altura;
+    g('tamV').textContent = valor.escala + '%';
+    g('altV').textContent = valor.altura + (valor.altura === 960 ? ' (padrão)' : '');
+    if(guardar){ try{ localStorage.setItem('estudio-tamanho', JSON.stringify(valor)); }catch(e){} }
+    // deixa o navegador refazer o layout antes de reencaixar os widgets
+    requestAnimationFrame(()=> window.dispatchEvent(new Event('resize')));
+  }
+
+  rEscala.addEventListener('input', ()=>{ valor.escala = +rEscala.value; aplicar(true); });
+  rAltura.addEventListener('input', ()=>{ valor.altura = +rAltura.value; aplicar(true); });
+  g('tamPadrao').addEventListener('click', ()=>{ valor = Object.assign({}, PADRAO); aplicar(true); });
+  botao.addEventListener('click', ()=>{
+    painel.classList.toggle('on');
+    botao.classList.toggle('on', painel.classList.contains('on'));
+    // os dois painéis moram no mesmo canto: abrir um fecha o outro
+    const zonas = g('zonaMenu');
+    if(zonas && painel.classList.contains('on')) zonas.classList.remove('on');
+  });
+
+  // a tecla Z abre o painel de zonas, que ocupa o mesmo lugar
+  document.addEventListener('keydown', ev=>{
+    const alvo = ev.target;
+    if(alvo && (alvo.isContentEditable || alvo.tagName === 'INPUT')) return;
+    if(ev.key.toLowerCase() === 'z' && !ev.metaKey && !ev.ctrlKey){
+      painel.classList.remove('on');
+      botao.classList.remove('on');
+    }
+  });
+
+  aplicar(false);
 })();
 
 /* ===== pentágono da semana, código original, em escopo próprio ===== */
