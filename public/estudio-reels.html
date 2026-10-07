@@ -8317,66 +8317,6 @@ mostrar(0);
 })();
 
 
-/* ===== régua do tamanho do quadro =====
-   Duas medidas, guardadas no navegador: --escala (o quadro inteiro aumenta ou
-   diminui) e --altq (a altura do quadro, 1080 x altq). Depois de mexer, um
-   evento de resize faz os widgets (agenda, sono, gráfico, pentágono) se
-   reencaixarem sozinhos — é o mesmo caminho de quando a janela muda. */
-(function(){
-  const g = id => document.getElementById(id);
-  const painel = g('tamMenu');
-  const botao = g('bTamanho');
-  const rEscala = g('tamEscala');
-  const rAltura = g('tamAltura');
-  if(!painel || !botao || !rEscala || !rAltura) return;
-
-  const PADRAO = { escala: 100, altura: 960 };
-  const raiz = document.documentElement;
-  let valor = Object.assign({}, PADRAO);
-
-  try{
-    const salvo = JSON.parse(localStorage.getItem('estudio-tamanho') || 'null');
-    if(salvo && salvo.escala && salvo.altura) valor = salvo;
-  }catch(e){}
-
-  function aplicar(guardar){
-    valor.escala = Math.min(170, Math.max(50, +valor.escala || 100));
-    valor.altura = Math.min(1500, Math.max(520, +valor.altura || 960));
-    raiz.style.setProperty('--escala', (valor.escala / 100).toFixed(3));
-    raiz.style.setProperty('--altq', String(valor.altura));
-    rEscala.value = valor.escala;
-    rAltura.value = valor.altura;
-    g('tamV').textContent = valor.escala + '%';
-    g('altV').textContent = valor.altura + (valor.altura === 960 ? ' (padrão)' : '');
-    if(guardar){ try{ localStorage.setItem('estudio-tamanho', JSON.stringify(valor)); }catch(e){} }
-    // deixa o navegador refazer o layout antes de reencaixar os widgets
-    requestAnimationFrame(()=> window.dispatchEvent(new Event('resize')));
-  }
-
-  rEscala.addEventListener('input', ()=>{ valor.escala = +rEscala.value; aplicar(true); });
-  rAltura.addEventListener('input', ()=>{ valor.altura = +rAltura.value; aplicar(true); });
-  g('tamPadrao').addEventListener('click', ()=>{ valor = Object.assign({}, PADRAO); aplicar(true); });
-  botao.addEventListener('click', ()=>{
-    painel.classList.toggle('on');
-    botao.classList.toggle('on', painel.classList.contains('on'));
-    // os dois painéis moram no mesmo canto: abrir um fecha o outro
-    const zonas = g('zonaMenu');
-    if(zonas && painel.classList.contains('on')) zonas.classList.remove('on');
-  });
-
-  // a tecla Z abre o painel de zonas, que ocupa o mesmo lugar
-  document.addEventListener('keydown', ev=>{
-    const alvo = ev.target;
-    if(alvo && (alvo.isContentEditable || alvo.tagName === 'INPUT')) return;
-    if(ev.key.toLowerCase() === 'z' && !ev.metaKey && !ev.ctrlKey){
-      painel.classList.remove('on');
-      botao.classList.remove('on');
-    }
-  });
-
-  aplicar(false);
-})();
-
 /* ===== pentágono da semana, código original, em escopo próprio ===== */
 
 (function(){
@@ -9249,6 +9189,82 @@ mostrar(0);
   carregarTextos();
 })();
 
+</script>
+
+<script>
+/* ===== régua do tamanho do quadro =====
+   Duas medidas, guardadas no navegador: --escala (o quadro inteiro aumenta ou
+   diminui) e --altq (a altura do quadro, 1080 x altq). Depois de mexer, um
+   evento de resize faz os widgets (agenda, sono, gráfico, pentágono) se
+   reencaixarem sozinhos — é o mesmo caminho de quando a janela muda. */
+(function(){
+  const g = id => document.getElementById(id);
+  const painel = g('tamMenu');
+  const botao = g('bTamanho');
+  const rEscala = g('tamEscala');
+  const rAltura = g('tamAltura');
+  if(!painel || !botao || !rEscala || !rAltura) return;
+
+  const PADRAO = { escala: 100, altura: 960 };
+  const raiz = document.documentElement;
+  let valor = Object.assign({}, PADRAO);
+
+  try{
+    const salvo = JSON.parse(localStorage.getItem('estudio-tamanho') || 'null');
+    if(salvo && salvo.escala && salvo.altura) valor = salvo;
+  }catch(e){}
+
+  function aplicar(guardar){
+    valor.escala = Math.min(170, Math.max(50, +valor.escala || 100));
+    valor.altura = Math.min(1500, Math.max(520, +valor.altura || 960));
+    raiz.style.setProperty('--escala', (valor.escala / 100).toFixed(3));
+    raiz.style.setProperty('--altq', String(valor.altura));
+    rEscala.value = valor.escala;
+    rAltura.value = valor.altura;
+    g('tamV').textContent = valor.escala + '%';
+    g('altV').textContent = valor.altura + (valor.altura === 960 ? ' (padrão)' : '');
+    if(guardar){ try{ localStorage.setItem('estudio-tamanho', JSON.stringify(valor)); }catch(e){} }
+    // deixa o navegador refazer o layout antes de reencaixar os widgets
+    requestAnimationFrame(()=> window.dispatchEvent(new Event('resize')));
+  }
+
+  rEscala.addEventListener('input', ()=>{ valor.escala = +rEscala.value; aplicar(true); });
+  rAltura.addEventListener('input', ()=>{ valor.altura = +rAltura.value; aplicar(true); });
+  g('tamPadrao').addEventListener('click', ()=>{ valor = Object.assign({}, PADRAO); aplicar(true); });
+  botao.addEventListener('click', ()=>{
+    painel.classList.toggle('on');
+    botao.classList.toggle('on', painel.classList.contains('on'));
+    // os dois painéis moram no mesmo canto: abrir um fecha o outro
+    const zonas = g('zonaMenu');
+    if(zonas && painel.classList.contains('on')) zonas.classList.remove('on');
+  });
+
+  // a tecla Z abre o painel de zonas, que ocupa o mesmo lugar
+  document.addEventListener('keydown', ev=>{
+    const alvo = ev.target;
+    if(alvo && (alvo.isContentEditable || alvo.tagName === 'INPUT')) return;
+    if(ev.key.toLowerCase() === 'z' && !ev.metaKey && !ev.ctrlKey){
+      painel.classList.remove('on');
+      botao.classList.remove('on');
+    }
+  });
+
+  aplicar(false);
+
+  // primeira visita: já abre o painel, senão a régua passa despercebida.
+  // depois disso vale o que a pessoa deixou (aberto ou fechado).
+  let aberto = true;
+  try{
+    const lembrado = localStorage.getItem('estudio-tamanho-aberto');
+    aberto = lembrado === null ? true : lembrado === '1';
+  }catch(e){}
+  painel.classList.toggle('on', aberto);
+  botao.classList.toggle('on', aberto);
+  const guardarEstado = ()=>{
+    try{ localStorage.setItem('estudio-tamanho-aberto', painel.classList.contains('on') ? '1' : '0'); }catch(e){}
+  };
+  botao.addEventListener('click', guardarEstado);
+})();
 </script>
 </body>
 </html>
