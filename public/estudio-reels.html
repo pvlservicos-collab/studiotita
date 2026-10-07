@@ -986,16 +986,19 @@
   .sv-nav{display:flex;gap:6px}
   .sv-nav .b{flex:1;padding:6px 0}
 
+  /* painel enxuto: só as duas réguas, ocupando o mínimo do canto */
   #tamMenu{
     position:fixed;left:10px;bottom:10px;
-    display:none;flex-direction:column;gap:3px;z-index:60;width:150px;
-    background:var(--painel);border:0;border-radius:var(--painel-raio);
-    padding:10px;backdrop-filter:blur(20px) saturate(1.1);box-shadow:0 10px 40px rgba(0,0,0,.34);
+    display:none;flex-direction:column;gap:1px;z-index:60;width:104px;
+    background:var(--painel);border:0;border-radius:10px;
+    padding:6px 7px;backdrop-filter:blur(20px) saturate(1.1);box-shadow:0 8px 28px rgba(0,0,0,.34);
   }
   #tamMenu.on{display:flex}
-  #tamMenu input[type=range]{width:100%;accent-color:var(--guia);margin-bottom:4px}
-  #tamMenu .t-lin{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:var(--dim)}
+  #tamMenu .rot-menu{font-size:8.5px;padding:0;margin-bottom:2px}
+  #tamMenu input[type=range]{width:100%;height:12px;accent-color:var(--guia);margin:0 0 3px}
+  #tamMenu .t-lin{display:flex;justify-content:space-between;align-items:baseline;font-size:9.5px;color:var(--dim);line-height:1.1}
   #tamMenu .t-lin b{color:var(--ink);font-weight:400}
+  #tamMenu .b{padding:3px 6px;font-size:10px;text-align:left}
 
   #zonaMenu{
     position:fixed;left:10px;bottom:10px;
@@ -1447,12 +1450,12 @@ document.body && (document.body.style.overscrollBehavior = 'none');
 </div>
 
 <div id="tamMenu">
-  <span class="rot-menu">tamanho do quadro</span>
+  <span class="rot-menu">quadro</span>
   <div class="t-lin"><span>tamanho</span><b id="tamV">100%</b></div>
-  <input type="range" min="30" max="170" step="1" value="50" id="tamEscala">
+  <input type="range" min="50" max="170" step="1" value="100" id="tamEscala">
   <div class="t-lin"><span>altura</span><b id="altV">960</b></div>
   <input type="range" min="520" max="1500" step="10" value="960" id="tamAltura">
-  <button class="b" id="tamPadrao">voltar ao padrão</button>
+  <button class="b" id="tamPadrao">padrão</button>
 </div>
 
 <div id="txtMenu">
@@ -9205,13 +9208,13 @@ mostrar(0);
   const rAltura = g('tamAltura');
   if(!painel || !botao || !rEscala || !rAltura) return;
 
-  const PADRAO = { escala: 50, altura: 960 };
+  const PADRAO = { escala: 100, altura: 960 };
   const raiz = document.documentElement;
   let valor = Object.assign({}, PADRAO);
 
   // o padrão mudou para metade do tamanho: quem já tinha um valor guardado
   // recebe o novo uma vez (depois disso a escolha dele volta a mandar)
-  const VERSAO_PADRAO = '2';
+  const VERSAO_PADRAO = '3';
   try{
     const versao = localStorage.getItem('estudio-tamanho-v');
     const salvo = JSON.parse(localStorage.getItem('estudio-tamanho') || 'null');
@@ -9224,14 +9227,14 @@ mostrar(0);
   }catch(e){}
 
   function aplicar(guardar){
-    valor.escala = Math.min(170, Math.max(30, +valor.escala || 50));
+    valor.escala = Math.min(170, Math.max(50, +valor.escala || 100));
     valor.altura = Math.min(1500, Math.max(520, +valor.altura || 960));
     raiz.style.setProperty('--escala', (valor.escala / 100).toFixed(3));
     raiz.style.setProperty('--altq', String(valor.altura));
     rEscala.value = valor.escala;
     rAltura.value = valor.altura;
     g('tamV').textContent = valor.escala + '%';
-    g('altV').textContent = valor.altura + (valor.altura === 960 ? ' (padrão)' : '');
+    g('altV').textContent = String(valor.altura);
     if(guardar){ try{ localStorage.setItem('estudio-tamanho', JSON.stringify(valor)); }catch(e){} }
     // deixa o navegador refazer o layout antes de reencaixar os widgets
     requestAnimationFrame(()=> window.dispatchEvent(new Event('resize')));
