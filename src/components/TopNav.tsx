@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/", label: "Posts" },
+  { href: "/", label: "Edição" },
+  { href: "/posts", label: "Posts" },
   { href: "/metricas", label: "Métricas" },
   { href: "/roteiros", label: "Roteiros" },
   { href: "/biblioteca", label: "Biblioteca" },
@@ -25,7 +26,7 @@ export default function TopNav() {
         <img src="/logo.png" alt="Logo" width={36} height={36} className="h-9 w-9 rounded-xl shadow-goldGlow" />
         <div>
           <div className="text-sm font-semibold tracking-tight text-ink-900">Videoteca IG</div>
-          <div className="text-[11px] text-ink-400">insights &amp; roteiros</div>
+          <div className="text-[11px] text-ink-400">biblioteca de edição</div>
         </div>
       </div>
 

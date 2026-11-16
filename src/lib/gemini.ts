@@ -404,3 +404,85 @@ Não descreva imagens, não escreva nada que não seja falado, não invente pont
     throw new GeminiRequestError(`O Gemini respondeu fora do formato esperado na transcrição: ${text.slice(0, 200)}`);
   }
 }
+
+
+// ---------------------------------------------------------------------------
+// Edição de concorrente: o Gemini assiste ao vídeo (ou olha a foto) e devolve
+// a FICHA DE EDIÇÃO + um PROMPT pronto para outro Claude replicar a edição
+// nos vídeos do Augusto. Usado pela Biblioteca de Edição.
+export interface EditStyleResult {
+  titulo: string;
+  resumo: string;
+  ficha: string;
+  prompt: string;
+  tags: string[];
+  model: string;
+}
+
+export const EDIT_STYLE_PROMPT = `Você é um editor de vídeo sênior especializado em Reels/Shorts verticais. Analise SOMENTE A EDIÇÃO deste material (não o conteúdo do que é dito) para que outro editor consiga replicar exatamente o mesmo estilo em vídeos de outra pessoa.
+
+Se for um vídeo, assista inteiro. Se for uma imagem (print), deduza tudo o que der da composição e diga o que não dá para saber.
+
+Responda em português, em JSON com:
+- "titulo": nome curto do estilo (ex.: "Split-screen com lousa e rabisco ao vivo").
+- "resumo": 2 a 3 frases dizendo o que torna essa edição boa.
+- "ficha": Markdown detalhado com as seções abaixo (use ## para cada uma, valores concretos: px aproximados em 1080x1920, cores em hex, segundos, fontes prováveis):
+  ## Formato e layout (proporção, divisões de tela, onde fica o rosto, margens, zonas seguras)
+  ## Ritmo e cortes (duração média de cada plano, jump cuts, pausas removidas, como abre os 3 primeiros segundos)
+  ## Câmera e movimento (zooms, punch-in, deriva, tremor, velocidade e curva das transições)
+  ## Legendas e textos (fonte, peso, tamanho, cor, contorno/sombra, posição, palavra a palavra ou frase, destaque de palavras)
+  ## Elementos gráficos (ícones, setas, rabiscos, cards, imagens, quando surgem em relação à fala, como entram e saem)
+  ## Cor e tratamento de imagem (contraste, temperatura, vinheta, grão, look)
+  ## Som (música, efeitos sonoros, silêncio, ducking)
+  ## O que não fazer (erros que quebrariam o estilo)
+- "prompt": um PROMPT PRONTO, em segunda pessoa, para colar num Claude que edita vídeos com Remotion/ffmpeg ("Edite este vídeo bruto no estilo X: ..."), com todas as regras numeradas, valores concretos e a ordem de execução. Deve funcionar sozinho, sem a ficha.
+- "tags": 3 a 6 palavras-chave do estilo.`;
+
+const EDIT_STYLE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    titulo: { type: "STRING" },
+    resumo: { type: "STRING" },
+    ficha: { type: "STRING" },
+    prompt: { type: "STRING" },
+    tags: { type: "ARRAY", items: { type: "STRING" } },
+  },
+  required: ["titulo", "resumo", "ficha", "prompt", "tags"],
+};
+
+export async function analyzeEditStyleWithGemini(mediaUrl: string, extra?: string): Promise<EditStyleResult> {
+  const apiKey = requireApiKey();
+  const model = modelName();
+  const uploaded = await uploadVideoToGemini(mediaUrl);
+  await waitUntilActive(uploaded.name, apiKey, 180_000);
+  const prompt = extra ? `${EDIT_STYLE_PROMPT}
+
+Observação de quem enviou: ${extra}` : EDIT_STYLE_PROMPT;
+  const res = await fetch(`${GEMINI_API_BASE}/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ file_data: { file_uri: uploaded.uri, mime_type: uploaded.mimeType } }, { text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json", responseSchema: EDIT_STYLE_SCHEMA, maxOutputTokens: 16384, temperature: 0.4 },
+    }),
+  });
+  if (!res.ok) {
+    throw new GeminiRequestError(`Gemini retornou erro (${res.status}) ao analisar a edição: ${await res.text()}. Verifique GEMINI_MODEL e GEMINI_API_KEY.`);
+  }
+  const data = await res.json();
+  const text: string = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "";
+  let parsed: Partial<EditStyleResult> = {};
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = { titulo: "Edição de referência", resumo: "", ficha: text, prompt: text, tags: [] };
+  }
+  return {
+    titulo: (parsed.titulo || "Edição de referência").trim(),
+    resumo: (parsed.resumo || "").trim(),
+    ficha: (parsed.ficha || "").trim(),
+    prompt: (parsed.prompt || "").trim(),
+    tags: Array.isArray(parsed.tags) ? parsed.tags.map(String) : [],
+    model,
+  };
+}

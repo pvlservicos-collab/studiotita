@@ -8,6 +8,7 @@ import { CompetitorInputError } from "@/lib/services/competitors";
 import { HashtagInputError } from "@/lib/services/hashtags";
 import { CategoryInputError } from "@/lib/services/categories";
 import { GeneratorInputError } from "@/lib/services/scriptGenerator";
+import { EditNoteNotFound } from "@/lib/services/editLibrary";
 
 /**
  * Converte erros conhecidos em respostas JSON claras: { error, code, hint }.
@@ -43,6 +44,9 @@ export function toApiError(err: unknown): { status: number; body: any } {
     err instanceof GeneratorInputError
   ) {
     return { status: 400, body: { error: err.message, code: "INPUT_INVALID" } };
+  }
+  if (err instanceof EditNoteNotFound) {
+    return { status: 404, body: { error: err.message, code: "EDIT_NOTE_NOT_FOUND" } };
   }
   console.error(err);
   return {

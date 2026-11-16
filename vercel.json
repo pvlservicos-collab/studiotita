@@ -2,9 +2,20 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "fluid": true,
   "functions": {
-    "src/app/api/video-projects/[id]/render/route.ts": { "maxDuration": 800 },
-    "src/app/api/video-projects/[id]/legendas/route.ts": { "maxDuration": 300 },
-    "src/app/api/analyses/route.ts": { "maxDuration": 300 },
-    "src/app/api/studio-flows/route.ts": { "maxDuration": 300 }
+    "src/app/api/video-projects/[id]/render/route.ts": {
+      "maxDuration": 800
+    },
+    "src/app/api/video-projects/[id]/legendas/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/analyses/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/studio-flows/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/edit-notes/learn/route.ts": {
+      "maxDuration": 300
+    }
   }
 }

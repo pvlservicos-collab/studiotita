@@ -48,6 +48,20 @@ import { fetchAccountMetrics, metaGraphRequest, metaIds } from "@/lib/meta";
 import { DEFAULT_ANALYSIS_PROMPT } from "@/lib/gemini";
 import { toApiError } from "@/lib/apiError";
 import { getActor } from "@/mcp/actor";
+import {
+  EDIT_KINDS,
+  appendToEditNote,
+  createEditNote,
+  editBriefing,
+  editLibraryIndex,
+  getEditNote,
+  learnCompetitorEdit,
+  listEditNotes,
+  saveEditPreference,
+  updateEditNote,
+  formatMetrics,
+  setVideoFormat,
+} from "@/lib/services/editLibrary";
 import { MCP_INSTRUCTIONS, renderToolList } from "@/mcp/guide";
 import type { AnalysisRow, VideoRow } from "@/lib/types";
 
@@ -122,6 +136,128 @@ export function registerTools(server: McpServer) {
       }
     }) as any);
   }
+
+  // ------------------------------------------------- biblioteca de edição
+  // A memória online de COMO editar os vídeos do Titã. Ler antes de editar;
+  // gravar toda preferência nova do Augusto. Ver MCP_INSTRUCTIONS.
+  const by = () => `claude:${getActor()}`;
+
+  tool("list_edit_library", {
+    title: "Biblioteca de Edição: índice",
+    description: "Índice da Biblioteca de Edição do Titã: formatos de vídeo, guias, regras (preferências do Augusto) e referências de concorrentes. Comece por aqui antes de qualquer edição. kind filtra; search busca no texto.",
+    inputSchema: {
+      kind: z.enum(EDIT_KINDS).optional().describe("formato | regra | referencia | guia"),
+      search: z.string().optional().describe("Palavra a buscar em título, texto e tags"),
+    },
+  }, async (a: { kind?: (typeof EDIT_KINDS)[number]; search?: string }) => {
+    if (!a.kind && !a.search) return editLibraryIndex();
+    const notes = await listEditNotes({ kind: a.kind, search: a.search });
+    return notes.map((n) => ({ slug: n.slug, kind: n.kind, title: n.title, summary: n.summary, format_slug: n.format_slug, updated_at: n.updated_at }));
+  });
+
+  tool("get_edit_briefing", {
+    title: "Briefing completo de edição de um formato",
+    description: "TUDO o que é preciso para editar um vídeo do Titã num formato: a ficha do formato + todas as regras que valem para ele (as do formato e as gerais) + os guias (identidade, cenário, pipeline). Chame SEMPRE antes de editar. As regras valem acima da ficha.",
+    inputSchema: { format_slug: z.string().describe("Slug do formato (ex.: metadinha). Veja em list_edit_library(kind='formato').") },
+  }, async (a: { format_slug: string }) => editBriefing(a.format_slug));
+
+  tool("get_format_metrics", {
+    title: "Desempenho de cada formato de edição",
+    description: "Média de views, mediana, salvamentos, compartilhamentos, comentários e engajamento dos Reels do Augusto agrupados por formato de edição, com os 5 melhores vídeos de cada. Use para recomendar qual formato usar.",
+    inputSchema: { format_slug: z.string().optional().describe("Um formato só (vazio = todos)") },
+  }, async (a: { format_slug?: string }) => formatMetrics(a.format_slug));
+
+  tool("set_video_format", {
+    title: "Definir o formato de edição de um vídeo",
+    description: "Liga um vídeo do Augusto a um formato de edição (corrige a classificação automática ou registra um vídeo novo). Entra na métrica do formato.",
+    inputSchema: { video_id: z.string().describe("UUID do vídeo"), format_slug: z.string() },
+  }, async (a: { video_id: string; format_slug: string }) => {
+    await setVideoFormat(a.video_id, a.format_slug);
+    return { ok: true };
+  });
+
+  tool("get_edit_note", {
+    title: "Ler uma nota da Biblioteca de Edição",
+    description: "Uma nota inteira (Markdown), com links [[...]], backlinks, regras ligadas (se for formato) e histórico de versões.",
+    inputSchema: { slug: z.string().describe("Slug ou id da nota") },
+  }, async (a: { slug: string }) => getEditNote(a.slug));
+
+  tool("save_edit_preference", {
+    title: "Salvar preferência de edição do Augusto",
+    description: "Use SEMPRE que o Augusto pedir uma mudança de edição que deve valer daqui pra frente (\"lembre que…\", \"sempre…\", \"nunca mais…\", \"não gostei de X\", ou uma correção que ele repete). Grava como regra na biblioteca, para todo Claude seguir. Escreva a regra de forma acionável, no imperativo, com valores concretos. Antes, confira em list_edit_library(kind='regra', search=...) se já existe uma parecida — se existir, use update_edit_note nela.",
+    inputSchema: {
+      rule: z.string().describe("A regra, acionável. Ex.: 'Cortar os trechos em que o Augusto olha para baixo para ler o roteiro.'"),
+      title: z.string().optional().describe("Título curto (padrão: começo da regra)"),
+      format_slug: z.string().optional().describe("Formato ao qual se aplica. Vazio = todos os formatos."),
+      original_request: z.string().optional().describe("O pedido do Augusto com as palavras dele"),
+      why: z.string().optional().describe("Motivo, se ele disse"),
+      tags: z.array(z.string()).optional(),
+    },
+  }, async (a: { rule: string; title?: string; format_slug?: string; original_request?: string; why?: string; tags?: string[] }) => {
+    const note = await saveEditPreference(a, by());
+    return { salvo: true, slug: note.slug, title: note.title, aviso: "Diga ao Augusto que a preferência foi salva na Biblioteca de Edição e já vale para os próximos vídeos." };
+  });
+
+  tool("create_edit_note", {
+    title: "Criar nota na Biblioteca de Edição",
+    description: "Cria um formato novo (ficha completa de um tipo de vídeo), um guia ou uma referência. Para preferências do Augusto use save_edit_preference. Markdown; use [[slug]] para ligar notas.",
+    inputSchema: {
+      kind: z.enum(EDIT_KINDS),
+      title: z.string(),
+      body_md: z.string().describe("Conteúdo em Markdown"),
+      summary: z.string().optional().describe("Uma frase (aparece no card)"),
+      tags: z.array(z.string()).optional(),
+      format_slug: z.string().optional().describe("Só para regras: formato ao qual se aplica"),
+      media_url: z.string().optional().describe("Vídeo/imagem de exemplo"),
+      change_note: z.string().optional(),
+    },
+  }, async (a: any) => {
+    const { change_note, ...input } = a;
+    const n = await createEditNote(input, by(), change_note || "criada pelo Claude");
+    return { slug: n.slug, title: n.title };
+  });
+
+  tool("update_edit_note", {
+    title: "Atualizar nota da Biblioteca de Edição",
+    description: "Reescreve campos de uma nota (gera uma versão nova no histórico). Use para melhorar a ficha de um formato com o que foi aprendido numa edição, ou ajustar uma regra que mudou. Para só acrescentar, prefira append_to_edit_note. Sempre explique a mudança em change_note.",
+    inputSchema: {
+      slug: z.string(),
+      title: z.string().optional(),
+      body_md: z.string().optional(),
+      summary: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      format_slug: z.string().nullable().optional(),
+      archived: z.boolean().optional().describe("true = arquivar (regra que não vale mais)"),
+      change_note: z.string().describe("O que mudou e por quê"),
+    },
+  }, async (a: any) => {
+    const { slug, change_note, ...patch } = a;
+    const n = await updateEditNote(slug, patch, by(), change_note);
+    return { slug: n.slug, title: n.title, updated_at: n.updated_at };
+  });
+
+  tool("append_to_edit_note", {
+    title: "Acrescentar trecho a uma nota",
+    description: "Acrescenta Markdown ao fim de uma nota sem mexer no resto (ex.: uma seção nova na ficha do formato, um aprendizado de uma edição aprovada).",
+    inputSchema: { slug: z.string(), markdown: z.string(), change_note: z.string() },
+  }, async (a: { slug: string; markdown: string; change_note: string }) => {
+    const n = await appendToEditNote(a.slug, a.markdown, by(), a.change_note);
+    return { slug: n.slug, updated_at: n.updated_at };
+  });
+
+  tool("learn_competitor_edit", {
+    title: "Aprender a edição de um concorrente (Gemini)",
+    description: "Manda um vídeo ou print de concorrente ao Gemini, que estuda SÓ A EDIÇÃO (layout, cortes, câmera, legendas, grafismos, cor, som) e devolve a ficha + um PROMPT PRONTO para editar no mesmo estilo. Fica salvo como referência na biblioteca. media_url precisa ser link direto do arquivo (mp4/jpg/png), público. Leva 1 a 3 minutos e gasta API do Gemini: só quando o usuário pedir.",
+    inputSchema: {
+      media_url: z.string().describe("Link direto do vídeo ou imagem"),
+      competitor: z.string().optional().describe("@ do concorrente"),
+      title: z.string().optional(),
+      notes: z.string().optional().describe("O que o Augusto gostou nessa edição"),
+    },
+  }, async (a: { media_url: string; competitor?: string; title?: string; notes?: string }) => {
+    const n = await learnCompetitorEdit(a, by());
+    return { slug: n.slug, title: n.title, resumo: n.summary, ver: `${appUrl()}/?nota=${n.slug}`, conteudo: n.body_md };
+  });
 
   // ---------------------------------------------------------------- guia
   tool("get_app_guide", {

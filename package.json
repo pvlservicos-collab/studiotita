@@ -9,7 +9,8 @@
     "lint": "next lint",
     "db:migrate": "tsx db/migrate.ts",
     "import:base": "tsx db/import-base.ts",
-    "seed:fluxos": "tsx db/seed-studio-flows.ts"
+    "seed:fluxos": "tsx db/seed-studio-flows.ts",
+    "seed:edicao": "tsx db/seed-edit-library.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

@@ -11,6 +11,21 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
     tools: [{ name: "get_app_guide", what: "Este guia + contagens atuais do banco." }],
   },
   {
+    group: "Biblioteca de Edição (memória de como editar os vídeos do Titã)",
+    tools: [
+      { name: "list_edit_library", what: "Índice: formatos de vídeo, guias, regras do Augusto e referências de concorrentes." },
+      { name: "get_edit_briefing", what: "Ficha do formato + todas as regras + guias, numa resposta. Chamar SEMPRE antes de editar." },
+      { name: "get_edit_note", what: "Uma nota inteira com links, backlinks, regras e histórico." },
+      { name: "get_format_metrics", what: "Desempenho de cada formato de edição no perfil (views, salvamentos, engajamento, melhores vídeos)." },
+      { name: "set_video_format", what: "Liga um vídeo a um formato de edição (entra na métrica)." },
+      { name: "save_edit_preference", what: "Grava uma preferência/correção do Augusto como regra (lembre que…, nunca mais…)." },
+      { name: "create_edit_note", what: "Cria formato, guia ou referência." },
+      { name: "update_edit_note", what: "Reescreve uma nota (gera versão no histórico)." },
+      { name: "append_to_edit_note", what: "Acrescenta um trecho ao fim de uma nota." },
+      { name: "learn_competitor_edit", what: "Gemini estuda a edição de um vídeo/print de concorrente e gera ficha + prompt pronto." },
+    ],
+  },
+  {
     group: "Posts e métricas",
     tools: [
       { name: "list_videos", what: "Vídeos (do Augusto, de um concorrente ou de uma hashtag) com métricas, status da análise e categorias. Busca por palavra e ordenação por qualquer métrica." },
@@ -115,8 +130,16 @@ const metricLegend = VIDEO_METRICS.map(
   (m) => `${m.key} = ${m.label}${m.unit === "ms" ? " (milissegundos)" : m.unit === "percent" ? " (%)" : ""}`
 ).join("; ");
 
-export const MCP_INSTRUCTIONS = `Você está conectado à Videoteca do Augusto (studiotita.vercel.app): a central de conteúdo do Instagram @augustotita.
+export const MCP_INSTRUCTIONS = `Você está conectado ao Studio Titã (studiotita.vercel.app): a Biblioteca de Edição dos vídeos do Augusto (@augustotita) e a central de conteúdo do Instagram dele.
 O app guarda os reels com as métricas da Meta, as análises do Gemini, os roteiros, a curadoria por categoria, a pesquisa de concorrentes e hashtags, e a biblioteca de arquivos do Augusto (método de roteiro, briefing, 5 volumes de Base de Ensino das aulas, referências científicas). Você tem acesso total: pode ler, criar, editar e apagar qualquer coisa, inclusive via SQL direto.
+
+BIBLIOTECA DE EDIÇÃO — O MAIS IMPORTANTE
+Este app é, antes de tudo, a memória online de COMO os vídeos do Titã (Augusto) são editados. Siga sempre:
+1. Antes de editar qualquer vídeo dele: list_edit_library para ver os formatos e get_edit_briefing(format_slug) do formato certo. Siga a ficha; as REGRAS valem acima da ficha (são correções mais recentes). Se não souber o formato, pergunte ao Augusto mostrando a lista.
+2. Sempre que o Augusto pedir uma mudança que deve valer daqui pra frente ("lembre que…", "sempre…", "nunca…", "não gostei de…", ou uma correção que se repete), grave com save_edit_preference — sem pedir permissão, é para isso que a biblioteca existe — e avise que salvou. Antes, veja se já existe regra parecida (list_edit_library kind='regra' search=...) e atualize essa em vez de duplicar.
+3. Quando uma edição for aprovada e você aprendeu algo novo sobre o formato, melhore a ficha (append_to_edit_note ou update_edit_note com change_note explicando). Formato novo de vídeo = create_edit_note(kind='formato') com a ficha completa.
+4. Para copiar a edição de um concorrente: learn_competitor_edit com o link do vídeo/print. Use o prompt gerado como base e só transforme em regra/formato o que o Augusto aprovar.
+5. Nunca apague notas: arquive (update_edit_note archived=true) — o histórico guarda tudo.
 
 COMO O APP FUNCIONA
 - Posts: sync_videos_from_meta atualiza os reels do Augusto. Cada vídeo tem colunas (views, reach, likes, comments, shares, saves) e o campo "metrics" com tudo o que a Meta informa: ${metricLegend}. Use esses números para decidir (salvamentos e compartilhamentos altos = conteúdo de valor; taxa de pulo alta = gancho fraco). get_best_posts faz o recorte "Melhores posts" por período; get_posts_report gera o relatório completo.
