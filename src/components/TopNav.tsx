@@ -48,7 +48,7 @@ export default function TopNav() {
               {tab.bilbo ? (
                 <span className="relative inline-flex items-center gap-1.5">
                   <span className="relative inline-flex leading-none">
-                    <BilboFace size={20} />
+                    <BilboFace size={22} />
                     {unseen > 0 && !isActive(tab.href) && (
                       <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-white">{unseen}</span>
                     )}
@@ -61,15 +61,6 @@ export default function TopNav() {
             </Link>
           ))}
         </nav>
-        {/* botão em destaque, sempre à direita */}
-        <Link
-          href="/criar-roteiro"
-          className={`rounded-full px-5 py-2 text-sm font-semibold shadow-goldGlow transition ${
-            isActive("/criar-roteiro") ? "bg-gold-500 text-ink-900" : "bg-ink-900 text-gold-200 hover:bg-ink-800"
-          }`}
-        >
-          ✦ Criar roteiro
-        </Link>
       </div>
     </header>
   );
