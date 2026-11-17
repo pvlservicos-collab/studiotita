@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { GlassCard, EmptyState, ProgressBar } from "@/components/ui";
+import BilboFace from "@/components/bilbo/BilboFace";
 
 type Post = {
   id: string;
@@ -118,7 +119,7 @@ export default function BilboPage() {
       <GlassCard strong className="p-6 md:p-8">
         <div className="flex flex-wrap items-center justify-between gap-6">
           <div className="flex items-center gap-5">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-b from-gold-100 to-white text-4xl shadow-goldGlow ring-1 ring-gold-200">🥸</div>
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-b from-gold-100 to-white text-4xl shadow-goldGlow ring-1 ring-gold-200"><BilboFace size={46} /></div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-600">Agente de concorrentes</div>
               <h1 className="mt-1 text-3xl font-semibold tracking-tight text-ink-900">Bilbo</h1>
@@ -188,7 +189,7 @@ function CompetitorCard({ card, viralFactor, taking, onTake }: { card: Card; vir
         title="Vigiado pelo Bilbo"
         className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-b from-gold-100 to-white text-2xl shadow-goldGlow ring-1 ring-gold-200"
       >
-        🥸
+        <BilboFace size={30} />
       </div>
       <div className="grid lg:grid-cols-[380px_1fr]">
         {/* mockup do Instagram */}

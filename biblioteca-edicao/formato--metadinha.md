@@ -33,7 +33,7 @@ Formato principal do Titã. O Augusto grava o vídeo falando **e ao mesmo tempo*
 - [ ] Augusto fluido, sem engasgo (ver [[video-fluido-sem-travar]])
 - [ ] Conferir frames de cada etapa: o risco certo aparece na fala certa
 
-Variação feita em código quando não há gravação de tela: [[metadinha-montada]]. Cenário e cores: [[identidade-tita]].
+Cenário e cores: [[identidade-tita]].
 
 # Como aparece nos vídeos publicados
 _(extraído das análises dos Reels dele)_

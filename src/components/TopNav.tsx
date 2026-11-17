@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import BilboFace from "@/components/bilbo/BilboFace";
 
-const TABS: { href: string; label: string; emoji?: string }[] = [
+const TABS: { href: string; label: string; bilbo?: boolean }[] = [
   { href: "/", label: "Edição" },
-  { href: "/bilbo", label: "Bilbo", emoji: "🥸" },
+  { href: "/bilbo", label: "Bilbo", bilbo: true },
   { href: "/posts", label: "Posts" },
   { href: "/metricas", label: "Métricas" },
   { href: "/roteiros", label: "Roteiros" },
@@ -44,10 +45,10 @@ export default function TopNav() {
                 isActive(tab.href) ? "btn-gold" : "text-ink-500 hover:bg-white hover:text-ink-800"
               }`}
             >
-              {tab.emoji ? (
+              {tab.bilbo ? (
                 <span className="relative inline-flex items-center gap-1.5">
-                  <span className="relative text-base leading-none">
-                    {tab.emoji}
+                  <span className="relative inline-flex leading-none">
+                    <BilboFace size={20} />
                     {unseen > 0 && !isActive(tab.href) && (
                       <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-white">{unseen}</span>
                     )}
