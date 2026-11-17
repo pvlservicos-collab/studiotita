@@ -26,6 +26,7 @@ export interface EditNote {
   source: string | null;
   pinned: boolean;
   archived: boolean;
+  origin: "ia" | "augusto";
   created_at: string;
   updated_at: string;
 }
@@ -103,15 +104,15 @@ async function addRevision(noteId: string, title: string, body: string, by: stri
 }
 
 export async function createEditNote(
-  input: { kind: EditKind; title: string; body_md?: string; summary?: string; tags?: string[]; format_slug?: string | null; media_url?: string | null; slug?: string; pinned?: boolean },
+  input: { kind: EditKind; title: string; body_md?: string; summary?: string; tags?: string[]; format_slug?: string | null; media_url?: string | null; slug?: string; pinned?: boolean; origin?: "ia" | "augusto" },
   by = "painel",
   why = "criada"
 ) {
   const slug = await uniqueSlug(input.slug || input.title);
   const note = await queryOne<EditNote>(
-    `insert into edit_notes (slug, kind, title, summary, body_md, tags, format_slug, media_url, source, pinned)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning *`,
-    [slug, input.kind, input.title, input.summary ?? null, input.body_md ?? "", input.tags ?? [], input.format_slug ?? null, input.media_url ?? null, by, input.pinned ?? false]
+    `insert into edit_notes (slug, kind, title, summary, body_md, tags, format_slug, media_url, source, pinned, origin)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning *`,
+    [slug, input.kind, input.title, input.summary ?? null, input.body_md ?? "", input.tags ?? [], input.format_slug ?? null, input.media_url ?? null, by, input.pinned ?? false, input.origin ?? "ia"]
   );
   await addRevision(note!.id, note!.title, note!.body_md, by, why);
   return note!;
@@ -162,7 +163,7 @@ export async function saveEditPreference(
     `\n**Vale para:** ${input.format_slug ? `[[${input.format_slug}]]` : "todos os formatos"}`,
     input.original_request ? `\n> Pedido original do Augusto (${date}): "${input.original_request.trim()}"` : `\n_Registrada em ${date} por ${by}._`,
   ].join("\n");
-  return createEditNote({ kind: "regra", title, body_md: body, format_slug: input.format_slug ?? null, tags: input.tags ?? [] }, by, "preferência do Augusto");
+  return createEditNote({ kind: "regra", title, body_md: body, format_slug: input.format_slug ?? null, tags: input.tags ?? [], origin: "augusto" }, by, "preferência do Augusto");
 }
 
 /** Edição de concorrente → Gemini → nota de referência com ficha + prompt pronto. */

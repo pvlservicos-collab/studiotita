@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     if (!b.title || !EDIT_KINDS.includes(b.kind)) {
       return NextResponse.json({ error: "Informe title e kind (formato, regra, referencia ou guia).", code: "INPUT_INVALID" }, { status: 400 });
     }
-    const note = await createEditNote(b, "painel");
+    const note = await createEditNote({ ...b, origin: b.kind === "regra" ? "augusto" : b.origin }, "painel");
     return NextResponse.json({ note });
   } catch (err) {
     return apiErrorResponse(err);

@@ -18,6 +18,7 @@ type Note = {
   media_url: string | null;
   source: string | null;
   pinned: boolean;
+  origin?: "ia" | "augusto";
   updated_at: string;
 };
 type FullNote = Note & {
@@ -167,7 +168,7 @@ export default function EditLibraryPage() {
         {!loading && formatos.length === 0 ? (
           <EmptyState title="Nenhum formato ainda" description="Rode npm run seed:edicao para carregar os formatos do Titã, ou crie um." />
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {formatos.map((f) => <FormatCard key={f.id} note={f} metric={metricOf(f.slug)} onOpen={() => setOpenSlug(f.slug)} />)}
           </div>
         )}
@@ -178,7 +179,7 @@ export default function EditLibraryPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         {/* Regras + guias + referências */}
         <div className="space-y-6">
-          <NoteList title="Regras e preferências do Augusto" hint="Cada correção que ele pede vira uma regra — vale acima da ficha do formato." notes={by("regra")} onOpen={setOpenSlug} formatos={notes} />
+          <NoteList title="Regras e preferências" hint="IA = deduzida pela IA das edições e análises · Augusto = pedido dele. Valem acima da ficha do formato." notes={by("regra")} onOpen={setOpenSlug} formatos={notes} />
           <NoteList title="Guias gerais" hint="Identidade, cenário, pipeline e ferramentas." notes={by("guia")} onOpen={setOpenSlug} formatos={notes} />
           <NoteList title="Referências de concorrentes" hint="Edições que o Gemini aprendeu, com o prompt pronto." notes={by("referencia")} onOpen={setOpenSlug} formatos={notes} />
         </div>
@@ -196,6 +197,7 @@ export default function EditLibraryPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <Badge tone={KIND_TONE[open.kind]}>{KIND_LABEL[open.kind]}</Badge>
+                  {open.kind === "regra" && <OriginTag origin={open.origin} />}
                   <code className="text-xs text-ink-400">[[{open.slug}]]</code>
                 </div>
                 {editing ? (
@@ -330,7 +332,10 @@ function NoteList({ title, hint, notes, onOpen, formatos }: { title: string; hin
           {notes.map((n) => (
             <button key={n.id} onClick={() => onOpen(n.slug)} className="flex w-full items-start justify-between gap-4 py-3 text-left hover:bg-white/50">
               <div className="min-w-0">
-                <div className="truncate font-medium text-ink-800">{n.title}</div>
+                <div className="flex items-center gap-2">
+                  {n.kind === "regra" && <OriginTag origin={n.origin} />}
+                  <div className="truncate font-medium text-ink-800">{n.title}</div>
+                </div>
                 <div className="line-clamp-1 text-xs text-ink-400">{n.summary || n.body_md.replace(/[#*>_`\[\]]/g, "").slice(0, 140)}</div>
               </div>
               <div className="shrink-0 text-right text-[11px] text-ink-400">
@@ -547,10 +552,10 @@ function FormatCard({ note, metric, onOpen }: { note: Note; metric?: Metric; onO
 
   const stats: [string, string][] = metric
     ? [
-        ["views no formato", nf(metric.total_views)],
+        ["views totais", nf(metric.total_views)],
         ["vídeos", String(metric.videos)],
-        ["média por vídeo", nf(metric.avg_views)],
-        ["salvamentos/vídeo", nf(metric.avg_saves)],
+        ["média/vídeo", nf(metric.avg_views)],
+        ["salv./vídeo", nf(metric.avg_saves)],
         ["compart./vídeo", nf(metric.avg_shares)],
         ["engajamento", metric.engagement_rate != null ? `${metric.engagement_rate}%` : "—"],
       ]
@@ -558,11 +563,11 @@ function FormatCard({ note, metric, onOpen }: { note: Note; metric?: Metric; onO
 
   return (
     <GlassCard className="flex flex-col overflow-hidden p-0 transition hover:-translate-y-0.5 hover:shadow-goldGlow">
-      <button onClick={onOpen} className="relative block h-64 w-full overflow-hidden bg-gradient-to-br from-ink-900 to-ink-800 text-left">
+      <button onClick={onOpen} className="relative block h-72 w-full overflow-hidden border-b border-gold-200/70 bg-gradient-to-b from-[#fbf7ee] to-white text-left">
         {thumbs.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-ink-400">sem capas ainda</div>
+          <div className="flex h-full items-center justify-center text-xs uppercase tracking-[0.2em] text-gold-500">sem vídeos ainda</div>
         ) : (
-          <div className="absolute inset-y-5 left-6 right-0">
+          <div className="absolute inset-y-4 left-4 right-0">
             {thumbs.map((t, i) => (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -570,9 +575,9 @@ function FormatCard({ note, metric, onOpen }: { note: Note; metric?: Metric; onO
                 src={t.thumb_url!}
                 alt=""
                 loading="lazy"
-                className="absolute top-0 h-full rounded-xl object-cover shadow-[0_12px_30px_rgba(0,0,0,0.45)] ring-1 ring-white/10"
+                className="absolute top-0 h-full rounded-xl object-cover shadow-[0_10px_24px_rgba(120,90,30,0.22)] ring-1 ring-gold-200"
                 style={{
-                  left: i * 38,
+                  left: i * 26,
                   aspectRatio: "9 / 16",
                   zIndex: 10 - i,
                   opacity: [1, 0.72, 0.48, 0.28, 0.14][i],
@@ -583,33 +588,41 @@ function FormatCard({ note, metric, onOpen }: { note: Note; metric?: Metric; onO
             ))}
           </div>
         )}
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-ink-900 to-transparent" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-1/4 bg-gradient-to-l from-white to-transparent" />
       </button>
 
-      <div className="flex flex-1 flex-col p-5">
+      <div className="flex flex-1 flex-col p-4">
         <button onClick={onOpen} className="text-left">
-          <div className="text-base font-semibold leading-snug text-ink-900">{note.title}</div>
+          <div className="line-clamp-2 text-sm font-semibold leading-snug text-ink-900">{note.title}</div>
           <p className="mt-1 line-clamp-2 text-xs text-ink-500">{note.summary}</p>
         </button>
 
         <button
           onClick={copy}
-          className={`mt-4 w-full rounded-full py-2.5 text-sm font-semibold transition ${state === "copiado" ? "bg-emerald-500 text-white" : "btn-gold"}`}
+          className={`mt-3 w-full rounded-full py-2 text-xs font-semibold transition ${state === "copiado" ? "bg-emerald-500 text-white" : "btn-gold"}`}
         >
-          {state === "copiando" ? "Copiando…" : state === "copiado" ? "Prompt copiado ✓" : state === "erro" ? "Não deu — tente de novo" : "Copiar prompt do formato"}
+          {state === "copiando" ? "Copiando…" : state === "copiado" ? "Prompt copiado ✓" : state === "erro" ? "Não deu — tente de novo" : "Copiar prompt"}
         </button>
 
         {stats.length > 0 && (
-          <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-2.5">
+          <div className="mt-3 grid grid-cols-3 gap-x-2 gap-y-2">
             {stats.map(([label, value]) => (
               <div key={label} className="min-w-0">
-                <div className="truncate text-[13px] font-semibold text-ink-800">{value}</div>
-                <div className="truncate text-[10px] text-ink-400">{label}</div>
+                <div className="truncate text-[12px] font-semibold text-ink-800">{value}</div>
+                <div className="truncate text-[9px] leading-tight text-ink-400">{label}</div>
               </div>
             ))}
           </div>
         )}
       </div>
     </GlassCard>
+  );
+}
+
+function OriginTag({ origin }: { origin?: "ia" | "augusto" }) {
+  return origin === "augusto" ? (
+    <span className="shrink-0 rounded-md bg-gold-500 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">Augusto</span>
+  ) : (
+    <span className="shrink-0 rounded-md border border-gold-300 bg-gold-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gold-700">IA</span>
   );
 }
