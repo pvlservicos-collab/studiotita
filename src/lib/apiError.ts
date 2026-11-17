@@ -9,6 +9,7 @@ import { HashtagInputError } from "@/lib/services/hashtags";
 import { CategoryInputError } from "@/lib/services/categories";
 import { GeneratorInputError } from "@/lib/services/scriptGenerator";
 import { EditNoteNotFound } from "@/lib/services/editLibrary";
+import { BilboInputError } from "@/lib/services/bilbo";
 
 /**
  * Converte erros conhecidos em respostas JSON claras: { error, code, hint }.
@@ -41,7 +42,8 @@ export function toApiError(err: unknown): { status: number; body: any } {
     err instanceof CompetitorInputError ||
     err instanceof HashtagInputError ||
     err instanceof CategoryInputError ||
-    err instanceof GeneratorInputError
+    err instanceof GeneratorInputError ||
+    err instanceof BilboInputError
   ) {
     return { status: 400, body: { error: err.message, code: "INPUT_INVALID" } };
   }

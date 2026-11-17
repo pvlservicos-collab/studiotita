@@ -401,3 +401,33 @@ create index if not exists idx_edit_format_videos_slug on edit_format_videos (fo
 
 -- Cópia permanente da capa (Vercel Blob): a thumbnail da Meta expira.
 alter table edit_format_videos add column if not exists thumb_url text;
+
+-- ============================================================
+-- Bilbo 🥸: agente que vigia até 3 concorrentes e separa os posts que mais
+-- performaram na semana (views / mediana do próprio perfil). Sem IA na seleção.
+create table if not exists bilbo_watch (
+  competitor_id uuid primary key references competitors(id) on delete cascade,
+  position      int not null default 0,
+  avatar_blob   text,
+  created_at    timestamptz not null default now()
+);
+create table if not exists bilbo_picks (
+  video_id      uuid primary key references videos(id) on delete cascade,
+  competitor_id uuid references competitors(id) on delete cascade,
+  score         real,
+  seen          boolean not null default false,
+  saved_at      timestamptz,
+  found_at      timestamptz not null default now()
+);
+create index if not exists idx_bilbo_picks_comp on bilbo_picks (competitor_id);
+create table if not exists bilbo_runs (
+  id         uuid primary key default gen_random_uuid(),
+  report     jsonb,
+  created_at timestamptz not null default now()
+);
+-- cópia permanente da capa (a da Meta expira)
+alter table videos add column if not exists thumb_blob text;
+-- começa vigiando Caio Carneiro e Eslen Delanogare
+insert into bilbo_watch (competitor_id, position)
+  select id, case username when 'caiocarneiro' then 0 else 1 end from competitors where username in ('caiocarneiro', 'eslen.delanogare')
+  on conflict (competitor_id) do nothing;

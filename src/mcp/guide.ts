@@ -26,6 +26,16 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
     ],
   },
   {
+    group: "Bilbo 🥸 (agente de concorrentes)",
+    tools: [
+      { name: "bilbo_week", what: "Melhores posts da semana dos concorrentes vigiados (score = views ÷ mediana do perfil)." },
+      { name: "bilbo_get_script", what: "Pega o roteiro frame a frame de um post (salva em Roteiros salvos)." },
+      { name: "bilbo_saved_scripts", what: "Roteiros salvos: post + gancho + estrutura." },
+      { name: "bilbo_scan", what: "Varre agora (roda sozinho todo dia)." },
+      { name: "bilbo_set_watchlist", what: "Escolhe os até 3 concorrentes vigiados." },
+    ],
+  },
+  {
     group: "Posts e métricas",
     tools: [
       { name: "list_videos", what: "Vídeos (do Augusto, de um concorrente ou de uma hashtag) com métricas, status da análise e categorias. Busca por palavra e ordenação por qualquer métrica." },
@@ -140,6 +150,9 @@ Este app é, antes de tudo, a memória online de COMO os vídeos do Titã (Augus
 3. Quando uma edição for aprovada e você aprendeu algo novo sobre o formato, melhore a ficha (append_to_edit_note ou update_edit_note com change_note explicando). Formato novo de vídeo = create_edit_note(kind='formato') com a ficha completa.
 4. Para copiar a edição de um concorrente: learn_competitor_edit com o link do vídeo/print. Use o prompt gerado como base e só transforme em regra/formato o que o Augusto aprovar.
 5. Nunca apague notas: arquive (update_edit_note archived=true) — o histórico guarda tudo.
+
+BILBO 🥸
+O Bilbo vigia até 3 concorrentes (começou com @caiocarneiro e @eslen.delanogare) e todo dia separa os posts da semana que mais performaram em relação à mediana do próprio perfil. Quem escolhe é o Augusto: "Pegar roteiro" (bilbo_get_script) salva o post e extrai o roteiro frame a frame; os salvos ficam em bilbo_saved_scripts com gancho e estrutura. Quando ele perguntar "o que está viralizando" ou "o que o Bilbo achou", use bilbo_week.
 
 COMO O APP FUNCIONA
 - Posts: sync_videos_from_meta atualiza os reels do Augusto. Cada vídeo tem colunas (views, reach, likes, comments, shares, saves) e o campo "metrics" com tudo o que a Meta informa: ${metricLegend}. Use esses números para decidir (salvamentos e compartilhamentos altos = conteúdo de valor; taxa de pulo alta = gancho fraco). get_best_posts faz o recorte "Melhores posts" por período; get_posts_report gera o relatório completo.

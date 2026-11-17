@@ -48,6 +48,7 @@ import { fetchAccountMetrics, metaGraphRequest, metaIds } from "@/lib/meta";
 import { DEFAULT_ANALYSIS_PROMPT } from "@/lib/gemini";
 import { toApiError } from "@/lib/apiError";
 import { getActor } from "@/mcp/actor";
+import { listWatched, overview as bilboOverview, pegarRoteiro, savedScripts as bilboSaved, scan as bilboScan, setWatched } from "@/lib/services/bilbo";
 import {
   EDIT_KINDS,
   appendToEditNote,
@@ -136,6 +137,37 @@ export function registerTools(server: McpServer) {
       }
     }) as any);
   }
+
+  // ------------------------------------------------------------- Bilbo 🥸
+  tool("bilbo_week", {
+    title: "Bilbo: virais da semana dos concorrentes",
+    description: "O que o Bilbo (agente que vigia até 3 concorrentes) separou: para cada concorrente vigiado, o perfil, os 9 posts recentes e os melhores da semana com score = views ÷ mediana de views do perfil (score ≥ 2 = viralizou). Use para mostrar ao Augusto o que está performando.",
+    inputSchema: {},
+  }, async () => bilboOverview());
+
+  tool("bilbo_get_script", {
+    title: "Bilbo: pegar roteiro de um post",
+    description: "Faz o mesmo que o botão dourado 'Pegar roteiro': salva o post em Roteiros salvos e manda o vídeo para a análise frame a frame do Gemini (~1 min). Depois leia com bilbo_saved_scripts (gancho e estrutura). Gasta API do Gemini: só quando o Augusto pedir.",
+    inputSchema: { video_id: z.string().describe("UUID do post (vem em bilbo_week)") },
+  }, async (a: { video_id: string }) => pegarRoteiro(a.video_id, `claude:${getActor()}`));
+
+  tool("bilbo_saved_scripts", {
+    title: "Bilbo: roteiros salvos",
+    description: "Posts de concorrentes que o Augusto salvou, com o roteiro extraído (gancho e estrutura) e o status da análise.",
+    inputSchema: {},
+  }, async () => bilboSaved());
+
+  tool("bilbo_scan", {
+    title: "Bilbo: varrer agora",
+    description: "Atualiza os posts dos concorrentes vigiados e recalcula os melhores da semana (roda sozinho todo dia).",
+    inputSchema: {},
+  }, async () => bilboScan());
+
+  tool("bilbo_set_watchlist", {
+    title: "Bilbo: escolher quem vigiar",
+    description: "Define os concorrentes que o Bilbo vigia (até 3 @, que precisam estar em Concorrência). Sem argumentos, só lista os atuais.",
+    inputSchema: { usernames: z.array(z.string()).optional().describe("@ dos concorrentes, ex.: ['caiocarneiro','eslen.delanogare']") },
+  }, async (a: { usernames?: string[] }) => (a.usernames ? setWatched(a.usernames) : listWatched()));
 
   // ------------------------------------------------- biblioteca de edição
   // A memória online de COMO editar os vídeos do Titã. Ler antes de editar;

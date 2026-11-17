@@ -2,21 +2,25 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
-const TABS = [
+const TABS: { href: string; label: string; emoji?: string }[] = [
   { href: "/", label: "Edição" },
+  { href: "/bilbo", label: "Bilbo", emoji: "🥸" },
   { href: "/posts", label: "Posts" },
   { href: "/metricas", label: "Métricas" },
   { href: "/roteiros", label: "Roteiros" },
   { href: "/biblioteca", label: "Biblioteca" },
   { href: "/concorrencia", label: "Concorrência" },
-  { href: "/integracoes", label: "Integrações" },
-  { href: "/estudio-reels", label: "Estúdio Reels" },
-  { href: "/video", label: "Vídeo" },
 ];
 
 export default function TopNav() {
   const pathname = usePathname();
+  // bolinha do Bilbo: posts que performaram e o Augusto ainda não viu
+  const [unseen, setUnseen] = useState(0);
+  useEffect(() => {
+    fetch("/api/bilbo/unseen").then((r) => r.json()).then((d) => setUnseen(d.unseen ?? 0)).catch(() => {});
+  }, [pathname]);
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   return (
@@ -40,7 +44,19 @@ export default function TopNav() {
                 isActive(tab.href) ? "btn-gold" : "text-ink-500 hover:bg-white hover:text-ink-800"
               }`}
             >
-              {tab.label}
+              {tab.emoji ? (
+                <span className="relative inline-flex items-center gap-1.5">
+                  <span className="relative text-base leading-none">
+                    {tab.emoji}
+                    {unseen > 0 && !isActive(tab.href) && (
+                      <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white ring-2 ring-white">{unseen}</span>
+                    )}
+                  </span>
+                  {tab.label}
+                </span>
+              ) : (
+                tab.label
+              )}
             </Link>
           ))}
         </nav>
