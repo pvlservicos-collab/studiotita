@@ -170,7 +170,7 @@ export default function BilboPage() {
         ) : (
           <div className="space-y-5">
             {saved.map((s) => (
-              <SavedRow key={s.video_id} s={s} />
+              <SavedRow key={s.video_id} s={s} retrying={!!taking[s.video_id]} onRetry={() => take(s.video_id)} />
             ))}
           </div>
         ))}
@@ -250,10 +250,10 @@ function CompetitorCard({ card, viralFactor, taking, onTake }: { card: Card; vir
                       <div className="mt-auto pt-2">
                         <button
                           onClick={() => onTake(p.id)}
-                          disabled={salvo || taking[p.id]}
+                          disabled={(salvo && p.analysis_status !== "error") || taking[p.id]}
                           className={`rounded-full px-5 py-2 text-sm font-semibold transition ${salvo ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "btn-gold"} disabled:cursor-default`}
                         >
-                          {taking[p.id] ? "Pegando…" : salvo ? (gerando ? "Extraindo roteiro…" : "Roteiro salvo ✓") : "Pegar roteiro"}
+                          {taking[p.id] ? "Pegando…" : salvo ? (gerando ? "Extraindo roteiro…" : p.analysis_status === "error" ? "Tentar de novo" : "Roteiro salvo ✓") : "Pegar roteiro"}
                         </button>
                       </div>
                     </div>
@@ -270,7 +270,14 @@ function CompetitorCard({ card, viralFactor, taking, onTake }: { card: Card; vir
 }
 
 /** Roteiro salvo: o post de um lado, gancho e estrutura do outro. */
-function SavedRow({ s }: { s: Saved }) {
+function friendlyError(e: string | null) {
+  if (!e) return "erro desconhecido.";
+  if (/prepayment credits are depleted|RESOURCE_EXHAUSTED|402/i.test(e)) return "os créditos da API do Gemini acabaram. Recarregue em aistudio.google.com (Billing) e clique em Tentar de novo.";
+  if (/não libera o arquivo|música licenciada/i.test(e)) return "a Meta não liberou o arquivo deste vídeo (música licenciada).";
+  return e.length > 300 ? e.slice(0, 300) + "…" : e;
+}
+
+function SavedRow({ s, retrying, onRetry }: { s: Saved; retrying: boolean; onRetry: () => void }) {
   const gerando = s.analysis_status === "pending" || s.analysis_status === "processing";
   return (
     <GlassCard className="overflow-hidden p-0">
@@ -291,7 +298,14 @@ function SavedRow({ s }: { s: Saved }) {
               <p className="mt-3 text-sm text-ink-500">O Gemini está lendo o vídeo frame a frame… (cerca de 1 minuto)</p>
             </div>
           ) : s.analysis_status === "error" ? (
-            <div className="rounded-xl bg-rose-50 p-4 text-sm text-rose-700">Não deu para extrair o roteiro: {s.analysis_error}</div>
+            <div className="rounded-xl bg-rose-50 p-4 text-sm text-rose-700">
+              Não deu para extrair o roteiro: {friendlyError(s.analysis_error)}
+              <div className="mt-3">
+                <button onClick={onRetry} disabled={retrying} className="btn-gold rounded-full px-5 py-2 text-sm font-semibold disabled:opacity-60">
+                  {retrying ? "Tentando…" : "Tentar de novo"}
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="space-y-5">
               <section>
