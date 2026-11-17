@@ -182,7 +182,14 @@ export default function BilboPage() {
 function CompetitorCard({ card, viralFactor, taking, onTake }: { card: Card; viralFactor: number; taking: Record<string, boolean>; onTake: (id: string) => void }) {
   const c = card.competitor;
   return (
-    <GlassCard className="overflow-hidden p-0">
+    <GlassCard className="relative overflow-hidden p-0">
+      {/* selo do Bilbo: este perfil está sendo vigiado */}
+      <div
+        title="Vigiado pelo Bilbo"
+        className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-b from-gold-100 to-white text-2xl shadow-goldGlow ring-1 ring-gold-200"
+      >
+        🥸
+      </div>
       <div className="grid lg:grid-cols-[380px_1fr]">
         {/* mockup do Instagram */}
         <div className="border-b border-gold-100 bg-gradient-to-b from-[#fbf7ee] to-white p-6 lg:border-b-0 lg:border-r">
@@ -217,7 +224,7 @@ function CompetitorCard({ card, viralFactor, taking, onTake }: { card: Card; vir
 
         {/* melhores da semana */}
         <div className="p-6">
-          <div className="flex items-end justify-between">
+          <div className="flex items-end justify-between pr-14">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-600">Melhores da semana</div>
               <h3 className="mt-1 text-lg font-semibold text-ink-900">@{c.username}</h3>
