@@ -398,3 +398,6 @@ create table if not exists edit_format_videos (
   updated_at  timestamptz not null default now()
 );
 create index if not exists idx_edit_format_videos_slug on edit_format_videos (format_slug);
+
+-- Cópia permanente da capa (Vercel Blob): a thumbnail da Meta expira.
+alter table edit_format_videos add column if not exists thumb_url text;

@@ -486,3 +486,21 @@ Observação de quem enviou: ${extra}` : EDIT_STYLE_PROMPT;
     model,
   };
 }
+
+/** Classifica imagens (capas de Reels) com um prompt. Resposta em JSON. */
+export async function classifyImagesWithGemini<T>(prompt: string, images: { label: string; data: Buffer; mime: string }[]): Promise<T> {
+  const apiKey = requireApiKey();
+  const parts: any[] = [{ text: prompt }];
+  for (const img of images) {
+    parts.push({ text: img.label });
+    parts.push({ inline_data: { mime_type: img.mime, data: img.data.toString("base64") } });
+  }
+  const res = await fetch(`${GEMINI_API_BASE}/v1beta/models/${modelName()}:generateContent?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { responseMimeType: "application/json", temperature: 0 } }),
+  });
+  if (!res.ok) throw new GeminiRequestError(`Gemini retornou erro (${res.status}) ao classificar capas: ${await res.text()}`);
+  const data = await res.json();
+  return JSON.parse(data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("") ?? "[]");
+}

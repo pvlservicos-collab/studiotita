@@ -5,7 +5,10 @@
  * lê daqui antes de editar e grava aqui cada preferência nova do Augusto.
  */
 import { query, queryOne } from "@/lib/db";
-import { analyzeEditStyleWithGemini } from "@/lib/gemini";
+import { analyzeEditStyleWithGemini, classifyImagesWithGemini } from "@/lib/gemini";
+import { put } from "@vercel/blob";
+import { metaGraphRequest } from "@/lib/meta";
+import { syncVideosFromMeta } from "@/lib/services/videos";
 
 export const EDIT_KINDS = ["formato", "regra", "referencia", "guia"] as const;
 export type EditKind = (typeof EDIT_KINDS)[number];
@@ -221,7 +224,8 @@ export interface FormatMetrics {
   avg_shares: number | null;
   engagement_rate: number | null; // (curtidas+comentários+salvamentos+compartilhamentos) / alcance
   last_posted_at: string | null;
-  top: { id: string; caption: string | null; permalink: string | null; views: number | null; saves: number | null; posted_at: string | null }[];
+  total_views: number | null;
+  top: { id: string; caption: string | null; permalink: string | null; views: number | null; saves: number | null; posted_at: string | null; thumb_url: string | null }[];
 }
 
 /** Desempenho de cada formato de edição, com os números da Meta dos vídeos do Augusto. */
@@ -233,7 +237,7 @@ export async function formatMetrics(slug?: string): Promise<FormatMetrics[]> {
             round(avg(v.reach))::int avg_reach, round(avg(v.likes))::int avg_likes, round(avg(v.comments))::int avg_comments,
             round(avg(v.saves))::int avg_saves, round(avg(v.shares))::int avg_shares,
             round((sum(coalesce(v.likes,0)+coalesce(v.comments,0)+coalesce(v.saves,0)+coalesce(v.shares,0))::numeric / nullif(sum(v.reach),0)) * 100, 2)::float engagement_rate,
-            max(v.posted_at) last_posted_at
+            max(v.posted_at) last_posted_at, sum(v.views)::bigint total_views
        from edit_format_videos f join videos v on v.id = f.video_id
       where ($1::text is null or f.format_slug = $1)
       group by f.format_slug order by avg(v.views) desc nulls last`,
@@ -241,10 +245,10 @@ export async function formatMetrics(slug?: string): Promise<FormatMetrics[]> {
   );
   const top = await query<{ format_slug: string } & FormatMetrics["top"][number]>(
     `select * from (
-       select f.format_slug, v.id, left(v.caption, 120) caption, v.permalink, v.views, v.saves, v.posted_at,
-              row_number() over (partition by f.format_slug order by v.views desc nulls last) rn
+       select f.format_slug, v.id, left(v.caption, 120) caption, v.permalink, v.views, v.saves, v.posted_at, f.thumb_url,
+              row_number() over (partition by f.format_slug order by (f.thumb_url is not null) desc, v.views desc nulls last) rn
          from edit_format_videos f join videos v on v.id = f.video_id
-        where ($1::text is null or f.format_slug = $1)) t where rn <= 5`,
+        where ($1::text is null or f.format_slug = $1)) t where rn <= 6`,
     [slug ?? null]
   );
   return rows.map((r) => ({ ...r, top: top.filter((t) => t.format_slug === r.format_slug).map(({ format_slug: _f, ...t }) => t) }));
@@ -256,4 +260,116 @@ export async function setVideoFormat(videoId: string, formatSlug: string) {
      on conflict (video_id) do update set format_slug = excluded.format_slug, confidence = 1, source = 'manual', updated_at = now()`,
     [videoId, formatSlug]
   );
+}
+
+// ------------------------------------------------- capas e vídeos novos
+const isImage = (b: Buffer) => (b[0] === 0xff && b[1] === 0xd8) || b.subarray(1, 4).toString() === "PNG" || b.subarray(8, 12).toString() === "WEBP";
+
+/** Baixa a capa atual do Reel (link novo pela Meta: o salvo no banco expira). */
+async function fetchThumb(video: { ig_media_id: string | null; thumbnail_url: string | null }): Promise<Buffer | null> {
+  let url = video.thumbnail_url;
+  if (video.ig_media_id) {
+    try {
+      const m: any = await metaGraphRequest("GET", `/${video.ig_media_id}`, { fields: "thumbnail_url,media_url" });
+      url = m?.thumbnail_url || url;
+    } catch {
+      /* usa a que tiver */
+    }
+  }
+  if (!url) return null;
+  try {
+    const r = await fetch(url);
+    const b = Buffer.from(await r.arrayBuffer());
+    return r.ok && isImage(b) ? b : null;
+  } catch {
+    return null;
+  }
+}
+
+async function storeThumb(videoId: string, img: Buffer) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+  const r = await put(`capas-reels/${videoId}.jpg`, img, { access: "public", token: process.env.BLOB_READ_WRITE_TOKEN, addRandomSuffix: false, contentType: "image/jpeg" });
+  return r.url;
+}
+
+/** Guarda cópia permanente da capa dos vídeos que ainda não têm. */
+export async function backfillThumbs(limit = 60) {
+  const rows = await query<{ id: string; ig_media_id: string | null; thumbnail_url: string | null }>(
+    `select v.id, v.ig_media_id, v.thumbnail_url from edit_format_videos f join videos v on v.id = f.video_id where f.thumb_url is null order by v.views desc nulls last limit $1`,
+    [limit]
+  );
+  let ok = 0;
+  for (const v of rows) {
+    const img = await fetchThumb(v);
+    const url = img ? await storeThumb(v.id, img).catch(() => null) : null;
+    if (url) {
+      await query(`update edit_format_videos set thumb_url = $2 where video_id = $1`, [v.id, url]);
+      ok++;
+    }
+  }
+  return { pendentes: rows.length, salvas: ok };
+}
+
+/** Vídeos novos do Augusto ainda sem formato: o Gemini olha a capa e classifica. */
+export async function classifyNewVideos(limit = 40) {
+  const formats = await listEditNotes({ kind: "formato" });
+  const recog = formats
+    .map((f) => {
+      const m = f.body_md.match(/## Como reconhecer pela capa\n([\s\S]*?)(\n#|\n\nIdentidade|$)/);
+      return `- ${f.slug}: ${f.title}. ${m ? m[1].trim() : f.summary ?? ""}`;
+    })
+    .join("\n");
+  const vids = await query<{ id: string; ig_media_id: string | null; thumbnail_url: string | null; caption: string | null }>(
+    `select v.id, v.ig_media_id, v.thumbnail_url, v.caption from videos v
+      where v.competitor_id is null and v.hashtag is null and not exists (select 1 from edit_format_videos f where f.video_id = v.id)
+      order by v.posted_at desc nulls last limit $1`,
+    [limit]
+  );
+  const imgs: { v: (typeof vids)[number]; img: Buffer }[] = [];
+  for (const v of vids) {
+    const img = await fetchThumb(v);
+    if (img) imgs.push({ v, img });
+  }
+  let classified = 0;
+  for (let i = 0; i < imgs.length; i += 12) {
+    const batch = imgs.slice(i, i + 12);
+    const res = await classifyImagesWithGemini<{ id: string; slug: string; conf: number }[]>(
+      `Formatos de edição do criador:\n${recog}\n- outros: nenhum dos anteriores.\n\nClassifique cada capa de Reel abaixo (precedida do ID e do começo da legenda) no slug mais provável. Responda só JSON: [{"id":"","slug":"","conf":0.0}]`,
+      batch.map(({ v, img }) => ({ label: `ID ${v.id} | legenda: ${(v.caption ?? "").slice(0, 160)}`, data: img, mime: "image/jpeg" }))
+    );
+    for (const r of res) {
+      const item = batch.find((b) => b.v.id === r.id);
+      if (!item) continue;
+      const url = await storeThumb(item.v.id, item.img).catch(() => null);
+      await query(
+        `insert into edit_format_videos (video_id, format_slug, confidence, source, thumb_url) values ($1, $2, $3, 'capa', $4) on conflict (video_id) do nothing`,
+        [item.v.id, r.slug, r.conf ?? 0.5, url]
+      );
+      classified++;
+    }
+  }
+  return { novos: classified };
+}
+
+/** Rotina diária: Reels novos da Meta (e números atualizados) → formato → capa. */
+export async function refreshFormatMetrics() {
+  const sync = await syncVideosFromMeta(50).then(() => "ok").catch((e: Error) => `falhou: ${e.message}`);
+  const classified = await classifyNewVideos(40);
+  const thumbs = await backfillThumbs(60);
+  return { sync_meta: sync, ...classified, capas: thumbs };
+}
+
+/** Prompt para colar no Claude: editar um vídeo neste formato, com o briefing inteiro embutido. */
+export async function buildFormatPrompt(formatSlug: string) {
+  const f = await getEditNote(formatSlug);
+  const briefing = await editBriefing(formatSlug);
+  return `Você é o editor de vídeo do Augusto Weber (@augustotita, "Titã"). Vou te mandar um vídeo bruto e você vai editá-lo no formato "${f.title}" — exatamente como os Reels dele que já deram certo neste formato.
+
+Como trabalhar:
+1. Se você tem o conector "Studio Titã", chame get_edit_briefing("${f.slug}") para pegar a versão mais atual deste briefing antes de começar.
+2. Siga a ficha do formato; as REGRAS valem acima da ficha.
+3. Sempre que eu pedir uma mudança que deve valer daqui pra frente, salve com save_edit_preference (se tiver o conector) ou me devolva a regra escrita para eu guardar.
+4. Ao terminar, me diga o que fez em cada etapa e o que precisa da minha aprovação.
+
+${briefing}`;
 }

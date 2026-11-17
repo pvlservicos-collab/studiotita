@@ -16,6 +16,15 @@
     },
     "src/app/api/edit-notes/learn/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/edit-notes/sync/route.ts": {
+      "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/edit-notes/sync",
+      "schedule": "0 9 * * *"
+    }
+  ]
 }

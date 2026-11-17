@@ -37,7 +37,8 @@ type Metric = {
   avg_comments: number | null;
   engagement_rate: number | null;
   last_posted_at: string | null;
-  top: { id: string; caption: string | null; permalink: string | null; views: number | null; saves: number | null }[];
+  total_views: number | null;
+  top: { id: string; caption: string | null; permalink: string | null; views: number | null; saves: number | null; thumb_url: string | null }[];
 };
 const nf = (n: number | null | undefined) => (n == null ? "—" : new Intl.NumberFormat("pt-BR", { notation: n >= 10000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(n));
 
@@ -157,43 +158,22 @@ export default function EditLibraryPage() {
       {error && <GlassCard className="p-4 text-sm text-rose-700">{error}</GlassCard>}
       {loading && <ProgressBar progress={0} indeterminate />}
 
-      {metrics.length > 0 && <PerformancePanel metrics={metrics} notes={notes} onOpen={setOpenSlug} />}
-
-      {/* Formatos */}
+      {/* Formatos: fileiras de cards com as capas empilhadas, botão copiar prompt e métricas */}
       <section>
-        <h2 className="mb-3 px-1 text-sm font-semibold uppercase tracking-wider text-ink-500">Formatos de vídeo</h2>
+        <div className="mb-4 flex items-end justify-between px-1">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-ink-500">Formatos do Titã</h2>
+          <span className="text-xs text-ink-400">copie o prompt e cole no Claude para editar no formato</span>
+        </div>
         {!loading && formatos.length === 0 ? (
           <EmptyState title="Nenhum formato ainda" description="Rode npm run seed:edicao para carregar os formatos do Titã, ou crie um." />
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {formatos.map((f) => {
-              const nRules = notes.filter((n) => n.kind === "regra" && (n.format_slug === f.slug || !n.format_slug)).length;
-              return (
-                <button key={f.id} onClick={() => setOpenSlug(f.slug)} className="text-left">
-                  <GlassCard className="h-full p-5 transition hover:-translate-y-0.5 hover:shadow-goldGlow">
-                    <div className="flex items-center justify-between">
-                      <Badge tone="gold">Formato</Badge>
-                      <span className="text-xs text-ink-400">{nRules} regras</span>
-                    </div>
-                    <div className="mt-3 text-lg font-semibold text-ink-900">{f.title}</div>
-                    <p className="mt-1 line-clamp-3 text-sm text-ink-500">{f.summary}</p>
-                    {metricOf(f.slug) && (
-                      <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-white/70 p-3 text-center">
-                        <div><div className="text-base font-semibold text-ink-900">{metricOf(f.slug)!.videos}</div><div className="text-[10px] uppercase tracking-wider text-ink-400">vídeos</div></div>
-                        <div><div className="text-base font-semibold text-ink-900">{nf(metricOf(f.slug)!.avg_views)}</div><div className="text-[10px] uppercase tracking-wider text-ink-400">views médias</div></div>
-                        <div><div className="text-base font-semibold text-ink-900">{nf(metricOf(f.slug)!.avg_saves)}</div><div className="text-[10px] uppercase tracking-wider text-ink-400">salvamentos</div></div>
-                      </div>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-1">
-                      {f.tags.slice(0, 5).map((t) => <span key={t} className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] text-ink-500">{t}</span>)}
-                    </div>
-                  </GlassCard>
-                </button>
-              );
-            })}
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {formatos.map((f) => <FormatCard key={f.id} note={f} metric={metricOf(f.slug)} onOpen={() => setOpenSlug(f.slug)} />)}
           </div>
         )}
       </section>
+
+      {metrics.length > 0 && <PerformancePanel metrics={metrics} notes={notes} onOpen={setOpenSlug} />}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         {/* Regras + guias + referências */}
@@ -536,6 +516,99 @@ function PerformancePanel({ metrics, notes, onOpen }: { metrics: Metric[]; notes
             ))}
           </tbody>
         </table>
+      </div>
+    </GlassCard>
+  );
+}
+
+/** Card de formato: capas dos Reels empilhadas (cada uma mais à direita e mais transparente),
+ *  título, botão "Copiar prompt" e as métricas em 3 colunas de texto pequeno. */
+function FormatCard({ note, metric, onOpen }: { note: Note; metric?: Metric; onOpen: () => void }) {
+  const [state, setState] = useState<"" | "copiando" | "copiado" | "erro">("");
+  const thumbs = (metric?.top ?? []).filter((t) => t.thumb_url).slice(0, 5);
+
+  async function copy(e: React.MouseEvent) {
+    e.stopPropagation();
+    setState("copiando");
+    try {
+      // ClipboardItem com Promise mantém o gesto do clique enquanto o prompt chega do servidor
+      const text = fetch(`/api/edit-notes/${note.slug}/prompt`).then((r) => r.text());
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+        await navigator.clipboard.write([new ClipboardItem({ "text/plain": text.then((t) => new Blob([t], { type: "text/plain" })) })]);
+      } else {
+        await navigator.clipboard.writeText(await text);
+      }
+      setState("copiado");
+      setTimeout(() => setState(""), 2200);
+    } catch {
+      setState("erro");
+    }
+  }
+
+  const stats: [string, string][] = metric
+    ? [
+        ["views no formato", nf(metric.total_views)],
+        ["vídeos", String(metric.videos)],
+        ["média por vídeo", nf(metric.avg_views)],
+        ["salvamentos/vídeo", nf(metric.avg_saves)],
+        ["compart./vídeo", nf(metric.avg_shares)],
+        ["engajamento", metric.engagement_rate != null ? `${metric.engagement_rate}%` : "—"],
+      ]
+    : [];
+
+  return (
+    <GlassCard className="flex flex-col overflow-hidden p-0 transition hover:-translate-y-0.5 hover:shadow-goldGlow">
+      <button onClick={onOpen} className="relative block h-64 w-full overflow-hidden bg-gradient-to-br from-ink-900 to-ink-800 text-left">
+        {thumbs.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-ink-400">sem capas ainda</div>
+        ) : (
+          <div className="absolute inset-y-5 left-6 right-0">
+            {thumbs.map((t, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={t.id}
+                src={t.thumb_url!}
+                alt=""
+                loading="lazy"
+                className="absolute top-0 h-full rounded-xl object-cover shadow-[0_12px_30px_rgba(0,0,0,0.45)] ring-1 ring-white/10"
+                style={{
+                  left: i * 38,
+                  aspectRatio: "9 / 16",
+                  zIndex: 10 - i,
+                  opacity: [1, 0.72, 0.48, 0.28, 0.14][i],
+                  transform: `scale(${1 - i * 0.045})`,
+                  transformOrigin: "left center",
+                }}
+              />
+            ))}
+          </div>
+        )}
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-ink-900 to-transparent" />
+      </button>
+
+      <div className="flex flex-1 flex-col p-5">
+        <button onClick={onOpen} className="text-left">
+          <div className="text-base font-semibold leading-snug text-ink-900">{note.title}</div>
+          <p className="mt-1 line-clamp-2 text-xs text-ink-500">{note.summary}</p>
+        </button>
+
+        <button
+          onClick={copy}
+          className={`mt-4 w-full rounded-full py-2.5 text-sm font-semibold transition ${state === "copiado" ? "bg-emerald-500 text-white" : "btn-gold"}`}
+        >
+          {state === "copiando" ? "Copiando…" : state === "copiado" ? "Prompt copiado ✓" : state === "erro" ? "Não deu — tente de novo" : "Copiar prompt do formato"}
+        </button>
+
+        {stats.length > 0 && (
+          <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-2.5">
+            {stats.map(([label, value]) => (
+              <div key={label} className="min-w-0">
+                <div className="truncate text-[13px] font-semibold text-ink-800">{value}</div>
+                <div className="truncate text-[10px] text-ink-400">{label}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </GlassCard>
   );
