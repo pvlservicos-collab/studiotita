@@ -154,7 +154,7 @@ export default function BilboPage() {
         (!data ? (
           <ProgressBar progress={0} indeterminate />
         ) : data.cards.length === 0 ? (
-          <EmptyState title="O Bilbo não está vigiando ninguém" description="Peça ao Claude: bilbo_set_watchlist com até 3 @ que já estão em Concorrência." />
+          <EmptyState title="O Bilbo não está vigiando ninguém" description="Peça ao Claude: bilbo_set_watchlist com all=true para vigiar todos os concorrentes de Concorrência." />
         ) : (
           <div className="space-y-6">
             {data.cards.map((c) => (

@@ -48,7 +48,17 @@ import { fetchAccountMetrics, metaGraphRequest, metaIds } from "@/lib/meta";
 import { DEFAULT_ANALYSIS_PROMPT } from "@/lib/gemini";
 import { toApiError } from "@/lib/apiError";
 import { getActor } from "@/mcp/actor";
-import { listWatched, overview as bilboOverview, pegarRoteiro, savedScripts as bilboSaved, scan as bilboScan, setWatched } from "@/lib/services/bilbo";
+import {
+  listWatched,
+  overview as bilboOverview,
+  pegarRoteiro,
+  savedScripts as bilboSaved,
+  scan as bilboScan,
+  scriptFromPost,
+  setWatched,
+  trending as bilboTrending,
+  watchAll,
+} from "@/lib/services/bilbo";
 import {
   EDIT_KINDS,
   appendToEditNote,
@@ -141,7 +151,7 @@ export function registerTools(server: McpServer) {
   // ------------------------------------------------------------- Bilbo 🥸
   tool("bilbo_week", {
     title: "Bilbo: virais da semana dos concorrentes",
-    description: "O que o Bilbo (agente que vigia até 3 concorrentes) separou: para cada concorrente vigiado, o perfil, os 9 posts recentes e os melhores da semana com score = views ÷ mediana de views do perfil (score ≥ 2 = viralizou). Use para mostrar ao Augusto o que está performando.",
+    description: "O que o Bilbo (agente que vigia os concorrentes) separou: para cada concorrente vigiado, o perfil, os 9 posts recentes e os melhores da semana com score = views ÷ mediana de views do perfil (score ≥ 2 = viralizou). Use para mostrar ao Augusto o que está performando.",
     inputSchema: {},
   }, async () => bilboOverview());
 
@@ -165,9 +175,46 @@ export function registerTools(server: McpServer) {
 
   tool("bilbo_set_watchlist", {
     title: "Bilbo: escolher quem vigiar",
-    description: "Define os concorrentes que o Bilbo vigia (até 3 @, que precisam estar em Concorrência). Sem argumentos, só lista os atuais.",
-    inputSchema: { usernames: z.array(z.string()).optional().describe("@ dos concorrentes, ex.: ['caiocarneiro','eslen.delanogare']") },
-  }, async (a: { usernames?: string[] }) => (a.usernames ? setWatched(a.usernames) : listWatched()));
+    description: "Define os concorrentes que o Bilbo vigia (precisam estar em Concorrência). all=true = vigiar todos os concorrentes cadastrados (o padrão). usernames = só esses @. Sem argumentos, só lista os atuais.",
+    inputSchema: {
+      all: z.boolean().optional().describe("true = vigiar todos os concorrentes da Concorrência"),
+      usernames: z.array(z.string()).optional().describe("@ dos concorrentes, ex.: ['caiocarneiro','eslen.delanogare'] (substitui a lista)"),
+    },
+  }, async (a: { all?: boolean; usernames?: string[] }) => (a.all ? watchAll() : a.usernames ? setWatched(a.usernames) : listWatched()));
+
+  tool("trending_this_week", {
+    title: "Vídeos em alta essa semana (todos os concorrentes)",
+    description:
+      "Use quando o Augusto perguntar o que está em alta / viralizando / bombando essa semana. Ranking dos posts recentes de TODOS os concorrentes da Videoteca, " +
+      "por vezes_o_normal (views ÷ mediana de views do próprio perfil). Cada post vem com o link do Instagram e as métricas (views, curtidas, comentários, engajamento). " +
+      "Responda SEMPRE com o link do Instagram e as métricas de cada post, e ofereça gerar o roteiro do Augusto com script_from_trending(video_id). " +
+      "refresh=true atualiza os perfis na Meta antes (leva 1 a 4 minutos).",
+    inputSchema: {
+      days: z.number().int().min(1).max(60).optional().describe("Janela em dias (padrão 7 = essa semana)"),
+      limit: z.number().int().min(1).max(50).optional().describe("Quantos posts (padrão 10)"),
+      username: z.string().optional().describe("Só um concorrente (@)"),
+      refresh: z.boolean().optional().describe("true = varre os concorrentes na Meta antes de responder"),
+    },
+  }, async (a: { days?: number; limit?: number; username?: string; refresh?: boolean }) => {
+    const varredura = a.refresh ? await bilboScan() : undefined;
+    const result = await bilboTrending(a);
+    return varredura?.ficaram_para_a_proxima ? { ...result, varredura_incompleta: varredura.ficaram_para_a_proxima } : result;
+  });
+
+  tool("script_from_trending", {
+    title: "Gerar roteiro do Augusto a partir de um vídeo em alta",
+    description:
+      "Quando o Augusto quiser o roteiro de um vídeo em alta: extrai o roteiro do vídeo original (frame a frame, Gemini) e gera um roteiro NOVO para ele, " +
+      "no método e na voz dele, mantendo o que fez o original performar. Devolve o gancho/estrutura do original + o roteiro novo completo (salvo em Roteiros). " +
+      "Pode levar até ~3 minutos. Se voltar status='extraindo', chame de novo com o mesmo video_id em 1 minuto. Gasta API do Gemini: só quando ele pedir.",
+    inputSchema: {
+      video_id: z.string().describe("UUID do post (vem em trending_this_week ou bilbo_week)"),
+      subject: z.string().optional().describe("Tema que o Augusto quer dar ao roteiro (vazio = o sistema escolhe a partir do original)"),
+      instructions: z.string().optional().describe("Pedidos extras do Augusto (tom, duração, CTA...)"),
+      scenes: z.boolean().optional().describe("true = inclui ideias de cena do Estúdio Reels (metadinha)"),
+    },
+  }, async (a: { video_id: string; subject?: string; instructions?: string; scenes?: boolean }) =>
+    scriptFromPost(a.video_id, { subject: a.subject, instructions: a.instructions, scenes: a.scenes }, `claude:${getActor()}`));
 
   // ------------------------------------------------- biblioteca de edição
   // A memória online de COMO editar os vídeos do Titã. Ler antes de editar;
@@ -884,7 +931,7 @@ export function registerTools(server: McpServer) {
 
   tool<{ input: string }>("add_competitors", {
     title: "Adicionar concorrentes",
-    description: "Adiciona concorrentes a partir de links do Instagram ou @usuarios (vários separados por espaço, vírgula ou linha). Só contas profissionais. Puxa os últimos 50 vídeos de cada.",
+    description: "Adiciona concorrentes a partir de links do Instagram ou @usuarios (vários separados por espaço, vírgula ou linha). Só contas profissionais. Puxa os últimos 50 vídeos de cada e já coloca o perfil na vigília do Bilbo.",
     inputSchema: { input: z.string() },
   }, async ({ input }) => ({ results: await addCompetitors(input) }));
 

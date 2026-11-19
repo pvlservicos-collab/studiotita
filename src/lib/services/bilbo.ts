@@ -2,17 +2,24 @@
  * Bilbo 🥸 — o agente que vigia os concorrentes do Augusto.
  *
  * Sem IA na seleção: todo dia ele atualiza os posts dos concorrentes vigiados
- * (até 3), compara as views de cada post da semana com a mediana do próprio
- * perfil e separa os que mais performaram. Quem escolhe é o Augusto: no botão
- * "Pegar roteiro" o vídeo vai para a análise frame a frame (Gemini) e o
- * roteiro (gancho + estrutura) fica salvo em "Roteiros salvos".
+ * (por padrão, todos os da Concorrência), compara as views de cada post da
+ * semana com a mediana do próprio perfil e separa os que mais performaram.
+ * Quem escolhe é o Augusto: no botão "Pegar roteiro" o vídeo vai para a análise
+ * frame a frame (Gemini) e o roteiro (gancho + estrutura) fica salvo em
+ * "Roteiros salvos". Pelo conector, scriptFromPost já devolve o roteiro NOVO
+ * do Augusto inspirado no post.
  */
 import { put } from "@vercel/blob";
 import { query, queryOne } from "@/lib/db";
 import { syncCompetitor } from "@/lib/services/competitors";
 import { requestAnalysis } from "@/lib/services/analyses";
+import { generateScript } from "@/lib/services/scriptGenerator";
+import { appUrl } from "@/lib/appUrl";
 
-export const MAX_WATCH = 3;
+/** teto de segurança (a Business Discovery da Meta aceita ~200 chamadas por hora) */
+export const MAX_WATCH = 50;
+/** a varredura para antes do limite de 300s da função; quem sobrar vai primeiro na próxima */
+const SCAN_BUDGET_MS = 230_000;
 const WEEK_DAYS = 7;
 const PICKS_PER_COMPETITOR = 3;
 /** a partir de quantas vezes a mediana do perfil o post conta como "viralizou" */
@@ -46,7 +53,17 @@ export async function listWatched() {
   );
 }
 
-/** Define quem o Bilbo vigia (até 3 @, que precisam estar em Concorrência). */
+/** O Bilbo passa a vigiar todos os concorrentes cadastrados em Concorrência. */
+export async function watchAll() {
+  await query(
+    `insert into bilbo_watch (competitor_id, position)
+       select id, (row_number() over (order by followers_count desc nulls last))::int + 100 from competitors
+     on conflict (competitor_id) do nothing`
+  );
+  return listWatched();
+}
+
+/** Define quem o Bilbo vigia (@ que precisam estar em Concorrência). */
 export async function setWatched(usernames: string[]) {
   const clean = [...new Set(usernames.map((u) => u.replace(/^@/, "").trim().toLowerCase()).filter(Boolean))];
   if (clean.length > MAX_WATCH) throw new BilboInputError(`O Bilbo vigia no máximo ${MAX_WATCH} concorrentes.`);
@@ -77,18 +94,27 @@ async function medianViews(competitorId: string) {
  * melhores da semana. Posts novos entram como "não vistos" (bolinha no menu).
  */
 export async function scan() {
-  const watched = await listWatched();
+  const started = Date.now();
+  // quem está há mais tempo sem atualizar vai primeiro (se o tempo acabar, fica para a próxima)
+  const watched = (await listWatched()).sort(
+    (a, b) => (a.last_synced_at ? Date.parse(a.last_synced_at) : 0) - (b.last_synced_at ? Date.parse(b.last_synced_at) : 0)
+  );
   const report: { username: string; ok: boolean; novos?: number; erro?: string }[] = [];
+  const pendentes: string[] = [];
   for (const c of watched) {
+    if (Date.now() - started > SCAN_BUDGET_MS) {
+      pendentes.push(c.username);
+      continue;
+    }
     try {
       await syncCompetitor(c.id, 50);
       const comp = await queryOne<{ profile_picture_url: string | null }>(`select profile_picture_url from competitors where id = $1`, [c.id]);
       const avatar = await keepImage(`bilbo/perfil-${c.id}.jpg`, comp?.profile_picture_url ?? null);
       if (avatar) await query(`update bilbo_watch set avatar_blob = $2 where competitor_id = $1`, [c.id, avatar]);
 
-      // capas dos posts recentes (mockup) — só as que ainda não foram guardadas
+      // capas dos posts recentes (os 9 do mockup) — só as que ainda não foram guardadas
       const recent = await query<{ id: string; thumbnail_url: string | null }>(
-        `select id, thumbnail_url from videos where competitor_id = $1 and thumb_blob is null order by posted_at desc limit 15`,
+        `select id, thumbnail_url from videos where competitor_id = $1 and thumb_blob is null order by posted_at desc limit 9`,
         [c.id]
       );
       for (const v of recent) {
@@ -118,7 +144,11 @@ export async function scan() {
     }
   }
   await query(`insert into bilbo_runs (report) values ($1)`, [JSON.stringify(report)]);
-  return { quando: new Date().toISOString(), vigiados: report };
+  return {
+    quando: new Date().toISOString(),
+    vigiados: report,
+    ...(pendentes.length ? { ficaram_para_a_proxima: pendentes.map((u) => "@" + u) } : {}),
+  };
 }
 
 // ------------------------------------------------------------ leitura
@@ -167,6 +197,9 @@ export async function overview() {
     );
     cards.push({ competitor: c, median_views: median, recent, best: best.map((b) => ({ ...b, viral: (b.score ?? 0) >= VIRAL_FACTOR })) });
   }
+  // com muitos vigiados, quem tem o post mais forte da semana aparece primeiro
+  const top = (card: { best: { score: number | null }[] }) => (card.best.length ? Math.max(...card.best.map((b) => b.score ?? 0)) : -1);
+  cards.sort((a, b) => top(b) - top(a));
   return { last_scan_at: lastRun?.created_at ?? null, viral_factor: VIRAL_FACTOR, unseen: await unseenCount(), cards };
 }
 
@@ -224,4 +257,179 @@ export async function savedScripts() {
 
 export async function removeSaved(videoId: string) {
   await query(`update bilbo_picks set saved_at = null where video_id = $1`, [videoId]);
+}
+
+// ------------------------------------------------------------ em alta na semana
+export type TrendingOptions = { days?: number; limit?: number; username?: string | null };
+
+/**
+ * Os vídeos em alta de TODOS os concorrentes (não só os vigiados): cada post dos
+ * últimos `days` dias comparado com a mediana de views do próprio perfil.
+ * Volta com o link do Instagram e as métricas, prontos para mandar na conversa.
+ */
+export async function trending(opts: TrendingOptions = {}) {
+  const days = Math.min(Math.max(Math.round(opts.days ?? WEEK_DAYS), 1), 60);
+  const limit = Math.min(Math.max(Math.round(opts.limit ?? 10), 1), 50);
+  const username = opts.username?.replace(/^@/, "").trim().toLowerCase() || null;
+
+  const rows = await query<{
+    video_id: string;
+    username: string;
+    name: string | null;
+    followers_count: number | null;
+    permalink: string | null;
+    posted_at: string | null;
+    views: number | null;
+    likes: number | null;
+    comments: number | null;
+    caption: string | null;
+    thumb: string | null;
+    median: number | null;
+    analysis_status: string | null;
+    hook: string | null;
+    saved_at: string | null;
+  }>(
+    `with med as (
+       select c.id, c.username, c.name, c.followers_count,
+              (select percentile_cont(0.5) within group (order by t.views)
+                 from (select views from videos where competitor_id = c.id and views is not null order by posted_at desc limit 30) t) median
+         from competitors c
+        where $3::text is null or c.username = $3
+     )
+     select v.id video_id, m.username, m.name, m.followers_count, v.permalink, v.posted_at, v.views, v.likes, v.comments,
+            left(v.caption, 280) caption, coalesce(v.thumb_blob, v.thumbnail_url) thumb, m.median,
+            a.status analysis_status, a.hook, p.saved_at
+       from videos v
+       join med m on m.id = v.competitor_id
+       left join bilbo_picks p on p.video_id = v.id
+       left join lateral (select status, hook from analyses a where a.video_id = v.id order by (a.status = 'done') desc, a.requested_at desc limit 1) a on true
+      where v.posted_at >= now() - make_interval(days => $1::int) and coalesce(v.views, 0) > 0
+      order by v.views::float / nullif(m.median, 0) desc nulls last, v.views desc
+      limit $2`,
+    [days, limit, username]
+  );
+
+  const stale = await query<{ username: string }>(
+    `select username from competitors
+      where (last_synced_at is null or last_synced_at < now() - interval '2 days') and ($1::text is null or username = $1)
+      order by username`,
+    [username]
+  );
+  const lastRun = await queryOne<{ created_at: string }>(`select created_at from bilbo_runs order by created_at desc limit 1`);
+
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  return {
+    periodo: `últimos ${days} dias`,
+    ultima_varredura_do_bilbo: lastRun?.created_at ?? null,
+    regra: `vezes_o_normal = views do post ÷ mediana de views dos últimos 30 vídeos do perfil. ${VIRAL_FACTOR}× ou mais = viralizou.`,
+    total: rows.length,
+    posts: rows.map((r, i) => {
+      const median = r.median != null ? Number(r.median) : null;
+      const score = median ? (r.views ?? 0) / median : null;
+      return {
+        posicao: i + 1,
+        video_id: r.video_id,
+        perfil: `@${r.username}`,
+        nome: r.name,
+        seguidores: r.followers_count != null ? Number(r.followers_count) : null,
+        instagram: r.permalink,
+        publicado_em: r.posted_at,
+        legenda: r.caption,
+        capa: r.thumb,
+        metricas: {
+          views: r.views,
+          curtidas: r.likes ?? "ocultas pelo perfil",
+          comentarios: r.comments,
+          // (curtidas + comentários) ÷ views; sem curtidas (perfil esconde) não dá para calcular
+          engajamento_pct: r.views && r.likes != null ? round1(((r.likes + (r.comments ?? 0)) / r.views) * 100) : null,
+          views_tipicas_do_perfil: median != null ? Math.round(median) : null,
+          vezes_o_normal: score != null ? round1(score) : null,
+          viralizou: (score ?? 0) >= VIRAL_FACTOR,
+        },
+        roteiro_do_original:
+          r.analysis_status === "done" ? "já extraído" : r.analysis_status === "pending" || r.analysis_status === "processing" ? "extraindo agora" : "ainda não",
+        gancho_do_original: r.hook ? r.hook.slice(0, 400) : null,
+        salvo_no_bilbo: Boolean(r.saved_at),
+      };
+    }),
+    ...(stale.length
+      ? {
+          aviso_dados_antigos: `Estes perfis não são atualizados há mais de 2 dias, então os posts recentes deles podem não aparecer: ${stale
+            .map((s) => "@" + s.username)
+            .join(", ")}. Rode trending_this_week com refresh=true (ou bilbo_scan) para atualizar.`,
+        }
+      : {}),
+    ver_no_app: `${appUrl()}/bilbo`,
+  };
+}
+
+// ------------------------------------------------------------ roteiro novo a partir de um post em alta
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Pega um post (em geral, um em alta de concorrente) e devolve o roteiro NOVO do Augusto
+ * inspirado nele. Se o roteiro do original ainda não foi extraído, dispara a análise frame a
+ * frame e espera até `waitSeconds`; se não ficar pronto a tempo, avisa para chamar de novo.
+ */
+export async function scriptFromPost(
+  videoId: string,
+  opts: { subject?: string | null; instructions?: string | null; scenes?: boolean; waitSeconds?: number } = {},
+  by = "bilbo"
+) {
+  const v = await queryOne<{ permalink: string | null; views: number | null; likes: number | null; comments: number | null; username: string | null }>(
+    `select v.permalink, v.views, v.likes, v.comments, c.username from videos v left join competitors c on c.id = v.competitor_id where v.id = $1`,
+    [videoId]
+  );
+  if (!v) throw new BilboInputError("Post não encontrado. Use o video_id que vem em trending_this_week ou bilbo_week.");
+  const perfil = v.username ? `@${v.username}` : "o próprio Augusto";
+  const original = { perfil, instagram: v.permalink, views: v.views, curtidas: v.likes, comentarios: v.comments };
+
+  await pegarRoteiro(videoId, by);
+  const latest = () =>
+    queryOne<{ status: string; error_message: string | null; hook: string | null; structure: string | null }>(
+      `select status, error_message, hook, structure from analyses where video_id = $1 order by (status = 'done') desc, requested_at desc limit 1`,
+      [videoId]
+    );
+  const deadline = Date.now() + Math.min(Math.max(opts.waitSeconds ?? 100, 0), 150) * 1000;
+  let a = await latest();
+  while (a && (a.status === "pending" || a.status === "processing") && Date.now() < deadline) {
+    await sleep(4000);
+    a = await latest();
+  }
+  if (!a || a.status === "error") {
+    throw new BilboInputError(
+      `Não consegui extrair o roteiro do vídeo original (${perfil}): ${a?.error_message ?? "a análise não começou"}. ` +
+        `Se for música licenciada, o Augusto pode baixar o vídeo e enviar pelo painel; se forem os créditos do Gemini, recarregue em aistudio.google.com.`
+    );
+  }
+  if (a.status !== "done") {
+    return {
+      status: "extraindo",
+      original,
+      mensagem:
+        "O Gemini ainda está extraindo o roteiro do vídeo original (às vezes leva 2 a 3 minutos). Chame script_from_trending de novo com o mesmo video_id em cerca de 1 minuto: o roteiro novo sai na hora.",
+    };
+  }
+
+  const adapt = [
+    `Este roteiro é uma ADAPTAÇÃO para o Augusto de um vídeo que está em alta${v.username ? ` no perfil @${v.username}` : ""} (${v.views ?? "?"} views).`,
+    "Mantenha o que fez o vídeo performar (o tipo de gancho, o arco da narrativa, o ritmo e os gatilhos), mas com o tema, as ideias, o método e a voz do Augusto. Não copie frases do original.",
+    opts.instructions?.trim() ?? "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const script = await generateScript({ videoIds: [videoId], subject: opts.subject ?? null, instructions: adapt, scenes: Boolean(opts.scenes) }, by);
+  return {
+    status: "pronto",
+    original: { ...original, gancho: a.hook, estrutura: a.structure },
+    roteiro_novo: {
+      id: script.id,
+      titulo: script.title,
+      gancho: script.hook,
+      estrutura: script.structure,
+      roteiro_completo: script.full_script,
+      ...(script.scenes ? { cenas_estudio_reels: script.scenes } : {}),
+    },
+    ver_no_app: `${appUrl()}/roteiros`,
+  };
 }

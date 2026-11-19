@@ -4,6 +4,7 @@
  * uma fonte só, para os três nunca divergirem.
  */
 import { VIDEO_METRICS } from "@/lib/metricLabels";
+import { appUrl } from "@/lib/appUrl";
 
 export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: string }[] }[] = [
   {
@@ -28,11 +29,13 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
   {
     group: "Bilbo 🥸 (agente de concorrentes)",
     tools: [
-      { name: "bilbo_week", what: "Melhores posts da semana dos concorrentes vigiados (score = views ÷ mediana do perfil)." },
-      { name: "bilbo_get_script", what: "Pega o roteiro frame a frame de um post (salva em Roteiros salvos)." },
+      { name: "trending_this_week", what: "Vídeos em alta essa semana em TODOS os concorrentes: link do Instagram + métricas + quantas vezes o normal do perfil." },
+      { name: "script_from_trending", what: "Gera o roteiro do Augusto a partir de um vídeo em alta (extrai o original e escreve o novo, numa chamada só)." },
+      { name: "bilbo_week", what: "A tela do Bilbo: por concorrente vigiado, o perfil, os posts recentes e os melhores da semana." },
+      { name: "bilbo_get_script", what: "Só extrai o roteiro frame a frame de um post (salva em Roteiros salvos)." },
       { name: "bilbo_saved_scripts", what: "Roteiros salvos: post + gancho + estrutura." },
       { name: "bilbo_scan", what: "Varre agora (roda sozinho todo dia)." },
-      { name: "bilbo_set_watchlist", what: "Escolhe os até 3 concorrentes vigiados." },
+      { name: "bilbo_set_watchlist", what: "Quem o Bilbo vigia: all=true (todos, o padrão) ou uma lista de @." },
     ],
   },
   {
@@ -151,8 +154,16 @@ Este app é, antes de tudo, a memória online de COMO os vídeos do Titã (Augus
 4. Para copiar a edição de um concorrente: learn_competitor_edit com o link do vídeo/print. Use o prompt gerado como base e só transforme em regra/formato o que o Augusto aprovar.
 5. Nunca apague notas: arquive (update_edit_note archived=true) — o histórico guarda tudo.
 
-BILBO 🥸
-O Bilbo vigia até 3 concorrentes (começou com @caiocarneiro e @eslen.delanogare) e todo dia separa os posts da semana que mais performaram em relação à mediana do próprio perfil. Quem escolhe é o Augusto: "Pegar roteiro" (bilbo_get_script) salva o post e extrai o roteiro frame a frame; os salvos ficam em bilbo_saved_scripts com gancho e estrutura. Quando ele perguntar "o que está viralizando" ou "o que o Bilbo achou", use bilbo_week.
+BIBLIOTECA DE FORMATOS
+Os formatos de vídeo do Augusto (metadinha, talking head no estúdio, vlog caminhando, carro vlog, esquete, caixinha de perguntas, split comparativo...) são as notas kind='formato' da Biblioteca de Edição: list_edit_library(kind='formato') lista, get_edit_briefing(slug) traz a ficha completa com as regras, get_format_metrics mostra qual formato performa melhor no perfil dele. A página é ${appUrl()}/ (aba Edição).
+
+BILBO 🥸 E O QUE ESTÁ EM ALTA
+O Bilbo vigia todos os concorrentes da Videoteca (Concorrência) e todo dia atualiza os posts deles e separa os que mais performaram em relação à mediana do próprio perfil. Concorrente novo (add_competitors) já entra na vigília.
+Quando o Augusto perguntar o que está em alta, viralizando ou bombando essa semana (ou "o que o Bilbo achou"):
+1. Chame trending_this_week. Se vier aviso_dados_antigos e ele quiser o quadro atualizado, chame de novo com refresh=true.
+2. Responda com uma lista: para cada post, o @, o LINK DO INSTAGRAM (campo instagram, sempre clicável), as métricas (views, curtidas, comentários, engajamento) e quantas vezes o normal do perfil (vezes_o_normal; 2× ou mais = viralizou), mais uma linha sobre o tema pela legenda.
+3. Ofereça: "quer que eu gere o roteiro de algum desses pra você?". Se ele quiser, chame script_from_trending(video_id, subject/instructions se ele disser o tema ou o tom). Mostre o gancho e a estrutura do original e depois o roteiro novo completo. Se voltar status='extraindo', avise que está terminando e chame de novo em 1 minuto.
+O roteiro novo fica salvo em Roteiros (${appUrl()}/roteiros) e o post fica em Roteiros salvos do Bilbo (${appUrl()}/bilbo).
 
 COMO O APP FUNCIONA
 - Posts: sync_videos_from_meta atualiza os reels do Augusto. Cada vídeo tem colunas (views, reach, likes, comments, shares, saves) e o campo "metrics" com tudo o que a Meta informa: ${metricLegend}. Use esses números para decidir (salvamentos e compartilhamentos altos = conteúdo de valor; taxa de pulo alta = gancho fraco). get_best_posts faz o recorte "Melhores posts" por período; get_posts_report gera o relatório completo.

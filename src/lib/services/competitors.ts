@@ -98,7 +98,10 @@ export async function addCompetitors(input: string) {
   const results = [];
   for (const username of usernames) {
     try {
-      results.push({ username, ok: true, ...(await syncCompetitorByUsername(username)) });
+      const synced = await syncCompetitorByUsername(username);
+      // todo concorrente novo já entra na vigília do Bilbo
+      await query(`insert into bilbo_watch (competitor_id, position) values ($1, 999) on conflict (competitor_id) do nothing`, [synced.competitor.id]);
+      results.push({ username, ok: true, ...synced });
     } catch (err) {
       results.push({ username, ok: false, error: (err as Error).message });
     }

@@ -100,7 +100,22 @@ function McpTab() {
   return (
     <div className="space-y-5">
       <GlassCard strong className="p-5">
-        <h3 className="mb-2 text-sm font-semibold text-ink-900">Como conectar o Claude do Augusto</h3>
+        <h3 className="mb-2 text-sm font-semibold text-ink-900">Conector no app do Claude (claude.ai, desktop e celular)</h3>
+        <p className="mb-3 text-sm text-ink-500">
+          Em Configurações → Conectores → Adicionar conector personalizado, cole o endereço abaixo trocando a chave pela
+          MCP_API_KEY. Deixe os campos de OAuth em branco. O conector vale no claude.ai, no app de desktop e no celular.
+        </p>
+        <pre className="scrollbar-thin overflow-x-auto rounded-xl bg-ink-900 p-4 text-xs text-gold-200">
+{`${origin}/api/mcp?key=SUA_MCP_API_KEY&client=augusto`}
+        </pre>
+        <p className="mt-3 text-xs text-ink-400">
+          Depois é só perguntar na conversa, por exemplo: &quot;quais vídeos estão em alta essa semana?&quot;, &quot;gera o roteiro do
+          segundo pra mim&quot; ou &quot;me mostra a ficha do formato metadinha&quot;.
+        </p>
+      </GlassCard>
+
+      <GlassCard strong className="p-5">
+        <h3 className="mb-2 text-sm font-semibold text-ink-900">Como conectar o Claude Code do Augusto</h3>
         <p className="mb-3 text-sm text-ink-500">
           Rode este comando uma vez no terminal do Claude Code, trocando a chave pela MCP_API_KEY (ela não aparece
           aqui porque esta página é pública):

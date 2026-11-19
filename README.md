@@ -98,10 +98,37 @@ claude mcp add --transport http videoteca-ig https://SEU_DOMINIO/api/mcp \
   --header "X-Client-Name: nome_do_cliente"
 ```
 
-A partir daí o Claude Code dele ganha as ferramentas:
+### Conector no app do Claude (claude.ai, desktop e celular)
+
+Para o Augusto usar no app do Claude (e não só no Claude Code): em
+**Configurações → Conectores → Adicionar conector personalizado**, cole
+
+```
+https://studiotita.vercel.app/api/mcp?key=SUA_MCP_API_KEY&client=augusto
+```
+
+e deixe o OAuth em branco. O conector vale no claude.ai, no desktop e no
+celular. O que ele pode pedir na conversa:
+
+- **Biblioteca de formatos**: "me mostra os formatos" / "a ficha da metadinha"
+  (`list_edit_library`, `get_edit_briefing`, `get_format_metrics`).
+- **Em alta essa semana**: "o que está em alta essa semana?" →
+  `trending_this_week` responde com os posts de **todos** os concorrentes,
+  cada um com o link do Instagram e as métricas (views, curtidas,
+  comentários, engajamento, quantas vezes o normal do perfil).
+- **Roteiro**: "gera o roteiro do segundo pra mim" → `script_from_trending`
+  extrai o roteiro do original e escreve o roteiro novo do Augusto (fica em
+  Roteiros).
+- **Bilbo**: vigia todos os concorrentes da Concorrência
+  (`bilbo_set_watchlist all=true`); concorrente novo já entra na vigília.
+
+A partir daí o Claude Code dele ganha as ferramentas (lista completa em
+`src/mcp/guide.ts` e na aba Integrações):
 
 | Tool | O que faz |
 |---|---|
+| `trending_this_week` | Vídeos em alta de todos os concorrentes, com link do Instagram e métricas |
+| `script_from_trending` | Roteiro novo do Augusto a partir de um vídeo em alta |
 | `list_videos` | Lista os vídeos com métricas e status da última análise |
 | `get_video` | Detalhe de um vídeo + histórico de análises |
 | `list_scripts` | Lista os roteiros salvos |
