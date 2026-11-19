@@ -262,8 +262,12 @@ export async function removeSaved(videoId: string) {
 // ------------------------------------------------------------ em alta na semana
 export type TrendingOptions = { days?: number; perProfile?: number; username?: string | null };
 
+/** Sem @ pedido: só os vigiados pelo Bilbo. Com um @: aquele concorrente, vigiado ou não. */
+const WATCHED_OR_USER = (param: string) =>
+  `((${param}::text is null and exists (select 1 from bilbo_watch w where w.competitor_id = c.id)) or c.username = ${param})`;
+
 /**
- * Os vídeos em alta de TODOS os concorrentes (não só os vigiados), em ranking POR
+ * Os vídeos em alta dos concorrentes vigiados pelo Bilbo, em ranking POR
  * PERFIL: cada concorrente tem a sua lista, com os posts dos últimos `days` dias
  * ordenados por views e comparados com a mediana do próprio perfil. Os perfis não
  * competem entre si (tamanhos de público diferentes). Volta com o link do Instagram
@@ -296,7 +300,7 @@ export async function trending(opts: TrendingOptions = {}) {
               (select percentile_cont(0.5) within group (order by t.views)
                  from (select views from videos where competitor_id = c.id and views is not null order by posted_at desc limit 30) t) median
          from competitors c
-        where $3::text is null or c.username = $3
+        where ${WATCHED_OR_USER("$3")}
      )
      , ranked as (
        select v.*, m.username, m.name, m.followers_count, m.median,
@@ -315,13 +319,13 @@ export async function trending(opts: TrendingOptions = {}) {
     [days, perProfile, username]
   );
   const allProfiles = await query<{ username: string }>(
-    `select username from competitors where $1::text is null or username = $1 order by followers_count desc nulls last`,
+    `select username from competitors c where ${WATCHED_OR_USER("$1")} order by followers_count desc nulls last`,
     [username]
   );
 
   const stale = await query<{ username: string }>(
-    `select username from competitors
-      where (last_synced_at is null or last_synced_at < now() - interval '2 days') and ($1::text is null or username = $1)
+    `select username from competitors c
+      where (last_synced_at is null or last_synced_at < now() - interval '2 days') and (${WATCHED_OR_USER("$1")})
       order by username`,
     [username]
   );

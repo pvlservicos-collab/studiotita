@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { GlassCard, EmptyState, ProgressBar } from "@/components/ui";
 
-/** Botão "Melhores" do Bilbo: o ranking POR PERFIL de todos os concorrentes (o mesmo que o conector manda). */
+/** Botão "Melhores" do Bilbo: o ranking POR PERFIL dos concorrentes vigiados (o mesmo que o conector manda). */
 
 type Post = {
   posicao: number;
