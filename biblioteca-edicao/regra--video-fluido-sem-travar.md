@@ -1,12 +1,12 @@
 ---
 slug: video-fluido-sem-travar
 kind: regra
-title: Vídeo do Augusto fluido, sem engasgo
+title: Vídeo do Augusto fluido, sem travamentos
 summary: None
 tags: qualidade, ffmpeg
 ---
-**Regra:** O bruto do iPhone vem a 60fps com cadência irregular (~30 quadros reais por segundo, duplicados de forma irregular). Converter direto com `fps=30` pega quadros repetidos e a imagem parece travar. Sempre aplicar `mpdecimate` antes do `fps=30` e conferir: zero quadros repetidos no recorte do Augusto.
+**Regra:** Não mexer nos quadros do vídeo do Augusto. Nada de `mpdecimate` (descartar quadros), nada de interpolar ou misturar quadros e nada de zoom contínuo ou reescala a cada quadro: tudo isso deixa a cadência irregular e causa leves travamentos. Usar os quadros do bruto como vieram, com um enquadramento fixo (escala e posição constantes durante a fala) e render final a 50 fps.
 
-**Por quê:** O Augusto reclamou que a imagem dele parecia "bugada, como se estivesse travando".
+**Por quê:** O Augusto notou leves travamentos no desempenho do vídeo. As tentativas anteriores (`mpdecimate` antes do fps e zoom contínuo de +2,5%) são suspeitas e foram retiradas.
 
 **Vale para:** todos os formatos

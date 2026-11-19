@@ -11,6 +11,6 @@ tags: técnico, ffmpeg, remotion, whisper
 4. **Pausas internas** > 0,3s viram jump cut (fica 0,12s de respiro). Fade de áudio de 10ms em cada emenda.
 5. **Sincronia com o iPad** (formato [[metadinha]]): extrair o áudio das duas gravações a 8 kHz, envelope a 100 Hz, correlação cruzada em 3 janelas (início, meio, fim). Exemplo real: iPad = bruto − 0,89s, deriva de ~0,03s em 15 min.
 6. **Recorte do iPad** (2752x2064): só o quadro do Estúdio Reels, `crop=1692:1504:528:504` → `scale=1080:960`. Conferir num frame, pois muda se a UI do iPad mudar.
-7. **Augusto**: `mpdecimate` antes do `fps=30` (ver [[video-fluido-sem-travar]]), `scale=1080:1920`, grade leve (`eq=contrast=1.04:saturation=1.03`, unsharp suave), sem vinheta.
-8. **Render** em Remotion 1080x1920 30fps, `--crf=16 --jpeg-quality=95`; se travar em algum frame, `--timeout=180000 --concurrency=4`.
+7. **Augusto**: quadros do bruto como vieram, sem `mpdecimate` e sem interpolação (ver [[video-fluido-sem-travar]]); `fps=50`, `scale=1080:1920`, grade leve (`eq=contrast=1.04:saturation=1.03`, unsharp suave), sem vinheta.
+8. **Render** em Remotion 1080x1920 50fps, `--crf=16 --jpeg-quality=95`; se travar em algum frame, `--timeout=180000 --concurrency=4`.
 9. **Conferência**: frames de cada etapa + contagem de frames repetidos no recorte do Augusto.

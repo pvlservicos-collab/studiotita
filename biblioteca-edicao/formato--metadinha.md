@@ -24,13 +24,13 @@ Formato principal do Titã. O Augusto grava o vídeo falando **e ao mesmo tempo*
 
 ## Movimento
 - Painel de baixo **parado** (é a gravação real; não dar zoom que corte o título do estúdio).
-- Augusto com zoom contínuo bem leve (+2,5% ao longo de cada fala).
+- Augusto com enquadramento fixo durante cada fala (sem zoom contínuo: causa leves travamentos).
 
 ## Checklist
 - [ ] Último take completo de cada frase, sem erros, sem trechos lendo o roteiro
 - [ ] Deslocamento do iPad medido pelo áudio e conferido em 3 pontos do vídeo
 - [ ] Recorte do quadro do estúdio sem nenhuma UI do iPad
-- [ ] Augusto fluido, sem engasgo (ver [[video-fluido-sem-travar]])
+- [ ] Augusto fluido, sem travamentos (ver [[video-fluido-sem-travar]]); vídeo final a 50 fps
 - [ ] Conferir frames de cada etapa: o risco certo aparece na fala certa
 
 Cenário e cores: [[identidade-tita]].
