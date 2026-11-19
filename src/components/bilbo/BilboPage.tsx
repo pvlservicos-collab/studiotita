@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { GlassCard, EmptyState, ProgressBar } from "@/components/ui";
 import BilboFace from "@/components/bilbo/BilboFace";
+import MelhoresView from "@/components/bilbo/MelhoresView";
 
 type Post = {
   id: string;
@@ -33,7 +34,7 @@ type Saved = Post & {
   structure: string | null;
 };
 
-type Tab = "virais" | "salvos";
+type Tab = "virais" | "salvos" | "melhores";
 const TABS: { id: Tab; label: string }[] = [
   { id: "virais", label: "Virais da semana" },
   { id: "salvos", label: "Roteiros salvos" },
@@ -72,6 +73,7 @@ export default function BilboPage() {
 
   useEffect(() => {
     if (window.location.hash === "#salvos") setTab("salvos");
+    if (window.location.hash === "#melhores") setTab("melhores");
     load();
     loadSaved();
     // abriu a aba = viu o que o Bilbo achou (some a bolinha)
@@ -130,9 +132,17 @@ export default function BilboPage() {
             </div>
           </div>
           <div className="text-right">
-            <button onClick={scanNow} disabled={scanning} className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-ink-700 ring-1 ring-gold-200 hover:bg-gold-50 disabled:opacity-60">
-              {scanning ? "Varrendo…" : "Varrer agora"}
-            </button>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => select(tab === "melhores" ? "virais" : "melhores")}
+                className={`rounded-full px-5 py-2 text-sm font-semibold ${tab === "melhores" ? "btn-gold" : "bg-white text-ink-700 ring-1 ring-gold-200 hover:bg-gold-50"}`}
+              >
+                Melhores
+              </button>
+              <button onClick={scanNow} disabled={scanning} className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-ink-700 ring-1 ring-gold-200 hover:bg-gold-50 disabled:opacity-60">
+                {scanning ? "Varrendo…" : "Varrer agora"}
+              </button>
+            </div>
             <div className="mt-2 text-xs text-ink-400">{data?.last_scan_at ? `última varredura ${ago(data.last_scan_at)}` : "varre sozinho todo dia"}</div>
           </div>
         </div>
@@ -162,6 +172,8 @@ export default function BilboPage() {
             ))}
           </div>
         ))}
+
+      {tab === "melhores" && <MelhoresView />}
 
       {tab === "salvos" &&
         (!saved ? (

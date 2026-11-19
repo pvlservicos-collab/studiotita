@@ -185,19 +185,20 @@ export function registerTools(server: McpServer) {
   tool("trending_this_week", {
     title: "Vídeos em alta essa semana (todos os concorrentes)",
     description:
-      "Use quando o Augusto perguntar o que está em alta / viralizando / bombando essa semana. Ranking dos posts recentes de TODOS os concorrentes da Videoteca, " +
-      "por vezes_o_normal (views ÷ mediana de views do próprio perfil). Cada post vem com o link do Instagram e as métricas (views, curtidas, comentários, engajamento). " +
-      "Responda SEMPRE com o link do Instagram e as métricas de cada post, e ofereça gerar o roteiro do Augusto com script_from_trending(video_id). " +
+      "Use quando o Augusto perguntar o que está em alta / viralizando / bombando essa semana. Ranking POR PERFIL de TODOS os concorrentes da Videoteca: " +
+      "cada concorrente com a sua própria lista (os perfis não competem entre si), os posts do período ordenados por views e com vezes_o_normal (views ÷ mediana do próprio perfil). " +
+      "Cada post vem com o link do Instagram e as métricas (views, curtidas, comentários, engajamento). " +
+      "Responda SEMPRE agrupado por perfil, com o link do Instagram e as métricas de cada post, e ofereça gerar o roteiro do Augusto com script_from_trending(video_id). " +
       "refresh=true atualiza os perfis na Meta antes (leva 1 a 4 minutos).",
     inputSchema: {
       days: z.number().int().min(1).max(60).optional().describe("Janela em dias (padrão 7 = essa semana)"),
-      limit: z.number().int().min(1).max(50).optional().describe("Quantos posts (padrão 10)"),
+      per_profile: z.number().int().min(1).max(20).optional().describe("Quantos posts por perfil (padrão 3)"),
       username: z.string().optional().describe("Só um concorrente (@)"),
       refresh: z.boolean().optional().describe("true = varre os concorrentes na Meta antes de responder"),
     },
-  }, async (a: { days?: number; limit?: number; username?: string; refresh?: boolean }) => {
+  }, async (a: { days?: number; per_profile?: number; username?: string; refresh?: boolean }) => {
     const varredura = a.refresh ? await bilboScan() : undefined;
-    const result = await bilboTrending(a);
+    const result = await bilboTrending({ days: a.days, perProfile: a.per_profile, username: a.username });
     return varredura?.ficaram_para_a_proxima ? { ...result, varredura_incompleta: varredura.ficaram_para_a_proxima } : result;
   });
 

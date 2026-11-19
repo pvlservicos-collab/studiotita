@@ -260,16 +260,18 @@ export async function removeSaved(videoId: string) {
 }
 
 // ------------------------------------------------------------ em alta na semana
-export type TrendingOptions = { days?: number; limit?: number; username?: string | null };
+export type TrendingOptions = { days?: number; perProfile?: number; username?: string | null };
 
 /**
- * Os vídeos em alta de TODOS os concorrentes (não só os vigiados): cada post dos
- * últimos `days` dias comparado com a mediana de views do próprio perfil.
- * Volta com o link do Instagram e as métricas, prontos para mandar na conversa.
+ * Os vídeos em alta de TODOS os concorrentes (não só os vigiados), em ranking POR
+ * PERFIL: cada concorrente tem a sua lista, com os posts dos últimos `days` dias
+ * ordenados por views e comparados com a mediana do próprio perfil. Os perfis não
+ * competem entre si (tamanhos de público diferentes). Volta com o link do Instagram
+ * e as métricas, prontos para mandar na conversa.
  */
 export async function trending(opts: TrendingOptions = {}) {
   const days = Math.min(Math.max(Math.round(opts.days ?? WEEK_DAYS), 1), 60);
-  const limit = Math.min(Math.max(Math.round(opts.limit ?? 10), 1), 50);
+  const perProfile = Math.min(Math.max(Math.round(opts.perProfile ?? 3), 1), 20);
   const username = opts.username?.replace(/^@/, "").trim().toLowerCase() || null;
 
   const rows = await query<{
@@ -296,17 +298,25 @@ export async function trending(opts: TrendingOptions = {}) {
          from competitors c
         where $3::text is null or c.username = $3
      )
-     select v.id video_id, m.username, m.name, m.followers_count, v.permalink, v.posted_at, v.views, v.likes, v.comments,
-            left(v.caption, 280) caption, coalesce(v.thumb_blob, v.thumbnail_url) thumb, m.median,
+     , ranked as (
+       select v.*, m.username, m.name, m.followers_count, m.median,
+              row_number() over (partition by v.competitor_id order by v.views desc) pos
+         from videos v join med m on m.id = v.competitor_id
+        where v.posted_at >= now() - make_interval(days => $1::int) and coalesce(v.views, 0) > 0
+     )
+     select r.id video_id, r.username, r.name, r.followers_count, r.permalink, r.posted_at, r.views, r.likes, r.comments,
+            left(r.caption, 280) caption, coalesce(r.thumb_blob, r.thumbnail_url) thumb, r.median,
             a.status analysis_status, a.hook, p.saved_at
-       from videos v
-       join med m on m.id = v.competitor_id
-       left join bilbo_picks p on p.video_id = v.id
-       left join lateral (select status, hook from analyses a where a.video_id = v.id order by (a.status = 'done') desc, a.requested_at desc limit 1) a on true
-      where v.posted_at >= now() - make_interval(days => $1::int) and coalesce(v.views, 0) > 0
-      order by v.views::float / nullif(m.median, 0) desc nulls last, v.views desc
-      limit $2`,
-    [days, limit, username]
+       from ranked r
+       left join bilbo_picks p on p.video_id = r.id
+       left join lateral (select status, hook from analyses a where a.video_id = r.id order by (a.status = 'done') desc, a.requested_at desc limit 1) a on true
+      where r.pos <= $2
+      order by r.followers_count desc nulls last, r.username, r.pos`,
+    [days, perProfile, username]
+  );
+  const allProfiles = await query<{ username: string }>(
+    `select username from competitors where $1::text is null or username = $1 order by followers_count desc nulls last`,
+    [username]
   );
 
   const stale = await query<{ username: string }>(
@@ -318,20 +328,12 @@ export async function trending(opts: TrendingOptions = {}) {
   const lastRun = await queryOne<{ created_at: string }>(`select created_at from bilbo_runs order by created_at desc limit 1`);
 
   const round1 = (n: number) => Math.round(n * 10) / 10;
-  return {
-    periodo: `últimos ${days} dias`,
-    ultima_varredura_do_bilbo: lastRun?.created_at ?? null,
-    regra: `vezes_o_normal = views do post ÷ mediana de views dos últimos 30 vídeos do perfil. ${VIRAL_FACTOR}× ou mais = viralizou.`,
-    total: rows.length,
-    posts: rows.map((r, i) => {
+  const post = (r: (typeof rows)[number], posicao: number) => {
       const median = r.median != null ? Number(r.median) : null;
       const score = median ? (r.views ?? 0) / median : null;
       return {
-        posicao: i + 1,
+        posicao,
         video_id: r.video_id,
-        perfil: `@${r.username}`,
-        nome: r.name,
-        seguidores: r.followers_count != null ? Number(r.followers_count) : null,
         instagram: r.permalink,
         publicado_em: r.posted_at,
         legenda: r.caption,
@@ -351,7 +353,34 @@ export async function trending(opts: TrendingOptions = {}) {
         gancho_do_original: r.hook ? r.hook.slice(0, 400) : null,
         salvo_no_bilbo: Boolean(r.saved_at),
       };
-    }),
+  };
+
+  // agrupa por perfil: cada concorrente com o seu próprio ranking
+  const perfis = new Map<string, { perfil: string; nome: string | null; seguidores: number | null; views_tipicas_do_perfil: number | null; posts: ReturnType<typeof post>[] }>();
+  for (const r of rows) {
+    let g = perfis.get(r.username);
+    if (!g) {
+      g = {
+        perfil: `@${r.username}`,
+        nome: r.name,
+        seguidores: r.followers_count != null ? Number(r.followers_count) : null,
+        views_tipicas_do_perfil: r.median != null ? Math.round(Number(r.median)) : null,
+        posts: [],
+      };
+      perfis.set(r.username, g);
+    }
+    g.posts.push(post(r, g.posts.length + 1));
+  }
+  const semPosts = allProfiles.filter((p) => !perfis.has(p.username)).map((p) => "@" + p.username);
+
+  return {
+    periodo: `últimos ${days} dias`,
+    ultima_varredura_do_bilbo: lastRun?.created_at ?? null,
+    regra:
+      `Ranking POR PERFIL (os perfis não competem entre si): em cada concorrente, os posts do período ordenados por views. ` +
+      `vezes_o_normal = views do post ÷ mediana de views dos últimos 30 vídeos do perfil; ${VIRAL_FACTOR}× ou mais = viralizou.`,
+    perfis: Array.from(perfis.values()),
+    ...(semPosts.length ? { sem_posts_no_periodo: semPosts } : {}),
     ...(stale.length
       ? {
           aviso_dados_antigos: `Estes perfis não são atualizados há mais de 2 dias, então os posts recentes deles podem não aparecer: ${stale

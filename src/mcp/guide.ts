@@ -29,7 +29,7 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
   {
     group: "Bilbo 🥸 (agente de concorrentes)",
     tools: [
-      { name: "trending_this_week", what: "Vídeos em alta essa semana em TODOS os concorrentes: link do Instagram + métricas + quantas vezes o normal do perfil." },
+      { name: "trending_this_week", what: "Vídeos em alta essa semana, ranking por perfil de TODOS os concorrentes: link do Instagram + métricas + quantas vezes o normal do perfil." },
       { name: "script_from_trending", what: "Gera o roteiro do Augusto a partir de um vídeo em alta (extrai o original e escreve o novo, numa chamada só)." },
       { name: "bilbo_week", what: "A tela do Bilbo: por concorrente vigiado, o perfil, os posts recentes e os melhores da semana." },
       { name: "bilbo_get_script", what: "Só extrai o roteiro frame a frame de um post (salva em Roteiros salvos)." },
@@ -161,7 +161,7 @@ BILBO 🥸 E O QUE ESTÁ EM ALTA
 O Bilbo vigia todos os concorrentes da Videoteca (Concorrência) e todo dia atualiza os posts deles e separa os que mais performaram em relação à mediana do próprio perfil. Concorrente novo (add_competitors) já entra na vigília.
 Quando o Augusto perguntar o que está em alta, viralizando ou bombando essa semana (ou "o que o Bilbo achou"):
 1. Chame trending_this_week. Se vier aviso_dados_antigos e ele quiser o quadro atualizado, chame de novo com refresh=true.
-2. Responda com uma lista: para cada post, o @, o LINK DO INSTAGRAM (campo instagram, sempre clicável), as métricas (views, curtidas, comentários, engajamento) e quantas vezes o normal do perfil (vezes_o_normal; 2× ou mais = viralizou), mais uma linha sobre o tema pela legenda.
+2. O ranking é POR PERFIL, nunca um ranking geral misturando concorrentes (os públicos têm tamanhos diferentes). Responda agrupado por @: em cada perfil, os posts na ordem, cada um com o LINK DO INSTAGRAM (campo instagram, sempre clicável), as métricas (views, curtidas, comentários, engajamento) e quantas vezes o normal do perfil (vezes_o_normal; 2× ou mais = viralizou), mais uma linha sobre o tema pela legenda.
 3. Ofereça: "quer que eu gere o roteiro de algum desses pra você?". Se ele quiser, chame script_from_trending(video_id, subject/instructions se ele disser o tema ou o tom). Mostre o gancho e a estrutura do original e depois o roteiro novo completo. Se voltar status='extraindo', avise que está terminando e chame de novo em 1 minuto.
 O roteiro novo fica salvo em Roteiros (${appUrl()}/roteiros) e o post fica em Roteiros salvos do Bilbo (${appUrl()}/bilbo).
 

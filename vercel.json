@@ -25,6 +25,9 @@
     },
     "src/app/api/bilbo/roteiro/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/bilbo/roteiro-novo/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
