@@ -34,13 +34,7 @@ import {
 } from "@/lib/services/studioFlows";
 import { flowToText, type StudioScene } from "@/lib/studio/scenes";
 import { flowLinks, appUrl } from "@/lib/appUrl";
-import {
-  anexarVideoPorUrl,
-  createVideoProject,
-  getVideoProject,
-  listVideoProjects,
-} from "@/lib/services/videoProjects";
-import { renderizarNoServidor } from "@/lib/services/videoRender";
+// Sem tools de edição/render: o sistema é a biblioteca; a edição do vídeo acontece do lado do Augusto.
 import { addCompetitors, getOwnStats, listCompetitors, removeCompetitor, syncCompetitor } from "@/lib/services/competitors";
 import { getHashtagQuota, listHashtagSearches, searchHashtag } from "@/lib/services/hashtags";
 import { buildReport, selectPosts } from "@/lib/services/report";
@@ -665,106 +659,6 @@ export function registerTools(server: McpServer) {
       `claude_code:${getActor()}`
     ),
   }));
-
-  // ------------------------------------------------------- vídeo (edição)
-  tool("list_video_projects", {
-    title: "Listar projetos de vídeo",
-    description: "Os vídeos em edição na aba Vídeo: arquivo bruto, metadinha ligada, status do render e link do mp4 pronto.",
-    inputSchema: {},
-  }, async () => {
-    const projetos = await listVideoProjects();
-    return {
-      total: projetos.length,
-      projetos: projetos.map((p) => ({
-        id: p.id,
-        titulo: p.title,
-        metadinha: p.flow_title,
-        arquivo: p.source_name,
-        duracao_s: p.duration,
-        render: p.render_status,
-        mp4: p.export_url,
-        editor: `${appUrl()}/video`,
-      })),
-    };
-  });
-
-  tool<{ title?: string; flow_id?: string; video_id?: string; video_url?: string; com_legendas?: boolean }>("create_video_project", {
-    title: "Criar um projeto de vídeo",
-    description:
-      "Abre um projeto na aba Vídeo já montado: as telas da metadinha (flow_id) entram na linha do tempo e, com video_url, o arquivo gravado é copiado para o nosso armazenamento. " +
-      "com_legendas=true traz as legendas da transcrição do vídeo de referência. Depois use render_video para gerar o mp4.",
-    inputSchema: {
-      title: z.string().optional(),
-      flow_id: z.string().optional().describe("UUID da metadinha (studio_flows)"),
-      video_id: z.string().optional().describe("UUID do vídeo de referência (para as legendas)"),
-      video_url: z.string().optional().describe("Link direto do arquivo gravado pelo Augusto"),
-      com_legendas: z.boolean().optional(),
-    },
-  }, async ({ title, flow_id, video_id, video_url, com_legendas }) => {
-    const projeto = await createVideoProject({
-      title,
-      flow_id: flow_id ?? null,
-      video_id: video_id ?? null,
-      com_legendas: com_legendas === true,
-      created_by: `claude_code:${getActor()}`,
-    });
-    const comVideo = video_url ? await anexarVideoPorUrl(projeto.id, video_url) : projeto;
-    return {
-      projeto: {
-        id: comVideo?.id,
-        titulo: comVideo?.title,
-        duracao_s: comVideo?.duration,
-        telas: (comVideo?.project?.telas ?? []).length,
-        legendas: (comVideo?.project?.legendas ?? []).length,
-      },
-      editor: `${appUrl()}/video`,
-      nota: video_url ? "Vídeo anexado. Chame render_video para gerar o mp4." : "Anexe o arquivo com attach_video_file ou pelo editor.",
-    };
-  });
-
-  tool<{ project_id: string; video_url: string; nome?: string }>("attach_video_file", {
-    title: "Anexar o arquivo gravado a um projeto",
-    description: "Copia o vídeo de um link direto para o nosso armazenamento e liga ao projeto (mede a duração e encaixa as telas).",
-    inputSchema: {
-      project_id: z.string(),
-      video_url: z.string().describe("Link direto do arquivo (mp4/mov)"),
-      nome: z.string().optional(),
-    },
-  }, async ({ project_id, video_url, nome }) => {
-    const p = await anexarVideoPorUrl(project_id, video_url, nome);
-    return { projeto: { id: p?.id, titulo: p?.title, arquivo: p?.source_name, duracao_s: p?.duration } };
-  });
-
-  tool<{ project_id: string }>("render_video", {
-    title: "Renderizar o vídeo no servidor",
-    description:
-      "Monta o mp4 final no servidor (cortes, telas da metadinha, textos, legendas e música) e guarda o arquivo. " +
-      "Responde na hora; acompanhe com video_status até ficar 'pronto' e então entregue o link ao usuário.",
-    inputSchema: { project_id: z.string() },
-  }, async ({ project_id }) => {
-    const projeto = await getVideoProject(project_id);
-    if (!projeto) throw new Error(`Projeto ${project_id} não encontrado.`);
-    if (!projeto.project?.fonte?.url) throw new Error("Este projeto ainda não tem o vídeo gravado. Use attach_video_file primeiro.");
-    await renderizarNoServidor.iniciar(project_id);
-    // o render segue depois da resposta desta chamada
-    void renderizarNoServidor.processar(project_id);
-    return { status: "renderizando", nota: "Leva menos que a duração do vídeo. Consulte video_status em ~30s." };
-  });
-
-  tool<{ project_id: string }>("video_status", {
-    title: "Status do render",
-    description: "Como está o render de um projeto: na fila, renderizando (com o progresso), pronto (com o link do mp4) ou erro.",
-    inputSchema: { project_id: z.string() },
-  }, async ({ project_id }) => {
-    const st = await renderizarNoServidor.status(project_id);
-    if (!st) throw new Error(`Projeto ${project_id} não encontrado.`);
-    return {
-      ...st,
-      progresso: `${Math.round(Number(st.render_progress ?? 0) * 100)}%`,
-      mp4: st.export_url,
-      nota: st.render_status === "pronto" ? "Mande o link do mp4 para o usuário." : undefined,
-    };
-  });
 
   // ------------------------------------------- Estúdio Reels (metadinhas)
   tool<{ kind?: "referencia" | "gerado"; video_id?: string; limit?: number; include_scenes?: boolean }>("list_studio_flows", {

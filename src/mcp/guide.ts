@@ -71,16 +71,6 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
     ],
   },
   {
-    group: "Vídeo (edição e render)",
-    tools: [
-      { name: "list_video_projects", what: "Os vídeos em edição, com o status do render e o link do mp4 pronto." },
-      { name: "create_video_project", what: "Abre um projeto já com as telas da metadinha (e o arquivo gravado, se vier o link)." },
-      { name: "attach_video_file", what: "Copia o arquivo gravado pelo Augusto (link direto) para dentro do projeto." },
-      { name: "render_video", what: "Monta o mp4 final no servidor: cortes, telas, textos, legendas e música." },
-      { name: "video_status", what: "Progresso do render e o link do arquivo quando fica pronto." },
-    ],
-  },
-  {
     group: "Criar roteiro",
     tools: [
       { name: "create_script", what: "Gera um roteiro novo combinando melhores vídeos, categorias, concorrentes, assunto, trechos das aulas e cenas do Estúdio Reels (ou aleatório)." },
@@ -169,7 +159,7 @@ COMO O APP FUNCIONA
 - Posts: sync_videos_from_meta atualiza os reels do Augusto. Cada vídeo tem colunas (views, reach, likes, comments, shares, saves) e o campo "metrics" com tudo o que a Meta informa: ${metricLegend}. Use esses números para decidir (salvamentos e compartilhamentos altos = conteúdo de valor; taxa de pulo alta = gancho fraco). get_best_posts faz o recorte "Melhores posts" por período; get_posts_report gera o relatório completo.
 - Análises: request_video_analysis manda o vídeo ao Gemini. A resposta sempre volta em: summary (resumo), transcript (transcrição), structure (engenharia reversa de marketing: cada parte com os segundos, a função, o gatilho mental, a emoção e como foi construída, mais o arco da narrativa e os aprendizados para replicar), hook (gancho: fala, texto na tela, visual, duração e técnica), frames (leitura visual frame a frame, segundo a segundo: enquadramento, gestos, cenário, todo texto que aparece na tela, inserções e o tom da voz — é a base para montar as cenas do Estúdio Reels) e categories (temas).
 - Estúdio Reels e metadinhas: "metadinha" é o reel em que o Augusto aparece em cima e a tela do Estúdio Reels ocupa a metade de baixo (agenda da semana pintada nas categorias do método, número grande, lista de atividades, conta do sono, pentágono das 168h, gráfico, mapa mental, metas). Cada análise que fica pronta já vem com a metadinha montada pelo sistema (studio_flow=false desliga): um fluxo de cenas com tempo, texto exato da tela, o que é revelado em cada etapa e a instrução de fala. Os fluxos REAIS do Augusto estão em list_studio_flows com kind="referencia", ligados ao vídeo em que foram usados — leia-os antes de propor telas. get_studio_patterns traz o que o sistema aprendeu com eles. Toda metadinha tem dois links prontos (vêm nas tools): 'ver' — a página com a prévia das telas desenhadas, que é o link para MANDAR ao usuário quando ele pedir uma metadinha na conversa — e 'abrir_no_estudio', que abre o fluxo dentro do Estúdio Reels para editar.
-- Vídeo pronto: a aba Vídeo monta o reel (vídeo do Augusto + a metadinha rodando na metade de baixo + legendas + cortes de silêncio + música) e o servidor renderiza o mp4. Pelo MCP o caminho é create_video_project (com flow_id da metadinha e video_url do arquivo gravado) → render_video → video_status até 'pronto' → mandar o link do mp4. O mesmo projeto continua editável no editor do site.
+- A EDIÇÃO É DO SEU LADO, NÃO DO SERVIDOR: este sistema é uma biblioteca. Ele guarda o conhecimento (formatos, regras, guias, metadinhas, roteiros, métricas, o Bilbo) e não edita nem renderiza vídeo pelo conector. Para editar um vídeo do Augusto, leia get_edit_briefing do formato (e get_studio_flow se for metadinha) e faça a edição com as ferramentas do próprio Augusto, no computador dele. Nunca envie o arquivo gravado para cá nem peça ao servidor para montar o mp4.
 - Dois tipos de roteiro: os EXTRAÍDOS dos vídeos (list_video_scripts: o que o Gemini tirou de cada vídeo analisado, do Augusto e dos concorrentes, guardados para sempre) e os GERADOS (list_scripts: criados pelo gerador, pelo Claude ou à mão). Cada roteiro gerado tem uma pontuação interna 0-100 pelos números dos vídeos de referência (ou do vídeo publicado, se estiver ligado a um).
 - Criar roteiro: create_script combina fontes (melhores vídeos do período, busca por palavra nos vídeos analisados, categorias, concorrentes, assunto, trechos das aulas) ou random=true; scenes=true pede ideias de cena do Estúdio Reels (a ferramenta de telas do Augusto: números grandes, perguntas, listas, pentágono das 168h, agenda dos Faróis, gráficos, metas, mapa mental, sono). Esses campos são sempre gerados pelo Gemini. O prompt e o modelo usados ficam gravados. Leva ~30-60s; acompanhe com get_analysis. Cada análise consome a API do Gemini: só dispare quando o usuário pedir.
 - Adequação às regras do Augusto (rules_fit): começa vazia. Preencha com save_analysis_fields quando o usuário pedir, comparando a transcrição com o método (arquivos de método e briefing da biblioteca).
