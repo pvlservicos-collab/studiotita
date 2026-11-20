@@ -19,6 +19,12 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
     ],
   },
   {
+    group: "Hermes (imagens no ChatGPT)",
+    tools: [
+      { name: "gerar_imagem", what: "Gera a imagem no chat do projeto Imagens Reels do ChatGPT e devolve link + prévia. Imagem do Augusto: usar_rosto_do_augusto=true (anexa as 4 fotos dele). Se vier 'gerando', chame de novo só com o job_id." },
+    ],
+  },
+  {
     group: "Biblioteca de Edição (memória de como editar os vídeos do Titã)",
     tools: [
       { name: "list_edit_library", what: "Índice: formatos de vídeo, guias, regras do Augusto e referências de concorrentes." },
@@ -156,6 +162,9 @@ Os formatos de vídeo do Augusto (metadinha, talking head no estúdio, vlog cami
 
 POSTADOR
 Quando o vídeo do Augusto estiver pronto e ele quiser postar, chame preparar_postagem com a legenda (no tom dele) e o vídeo, e mande o link_para_o_augusto. Você NUNCA publica nem agenda: quem clica em Postar ou Agendar é ele, na página do link, onde também edita cada campo. O vídeo chega à VPS por video_url (link direto e público), pelo comando 'enviar_video_pelo_terminal' (se você tiver terminal) ou arrastado por ele na página. Acompanhe com ver_postagem.
+
+IMAGENS (HERMES)
+Quando o Augusto pedir uma imagem (capa, cena, ilustração para o Reels), use gerar_imagem: o Hermes manda o comando no chat do projeto "Imagens Reels" do ChatGPT dele, que já tem o estilo, e devolve o link do arquivo original + uma prévia. Se a imagem for dele ("faz uma imagem minha…"), passe usar_rosto_do_augusto=true para anexar as 4 fotos de referência do rosto. Leva de 1 a 4 minutos: enquanto vier status 'gerando', chame de novo só com o job_id. Entregue o imagem_url.
 
 BILBO 🥸 E O QUE ESTÁ EM ALTA
 O Bilbo vigia os concorrentes escolhidos (hoje, os internacionais; os brasileiros ficam em Concorrência, mas fora da vigília) e todo dia atualiza os posts deles e separa os que mais performaram em relação à mediana do próprio perfil. Concorrente novo (add_competitors) já entra na vigília. O ranking de em alta só mostra os vigiados; para um perfil fora da vigília, passe o username.

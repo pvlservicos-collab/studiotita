@@ -68,6 +68,7 @@ import {
   setVideoFormat,
 } from "@/lib/services/editLibrary";
 import { createPostagem, getById, PostagemInputError, resumo, uploadLinks, vpsFetch, type PostagemRow } from "@/lib/services/postagens";
+import { hermesGerar } from "@/lib/services/hermes";
 import { MCP_INSTRUCTIONS, renderToolList } from "@/mcp/guide";
 import type { AnalysisRow, VideoRow } from "@/lib/types";
 
@@ -297,6 +298,40 @@ export function registerTools(server: McpServer) {
     const rows = await query<PostagemRow>(`select * from postagens order by created_at desc limit 10`);
     return rows.map(resumo);
   });
+
+  // ------------------------------------------------- Hermes (imagens no ChatGPT)
+  // Registro próprio: devolve a imagem como conteúdo (prévia) além do link.
+  server.registerTool("gerar_imagem", {
+    title: "Hermes: gerar imagem no ChatGPT (projeto Imagens Reels)",
+    description:
+      "O Hermes (agente na VPS do Titã, com o ChatGPT do Augusto logado) manda o comando de criação no chat do projeto 'Imagens Reels', que já tem o estilo das imagens, e devolve o link do arquivo original na VPS + uma prévia. " +
+      "Quando a imagem tiver o Augusto ('faz uma imagem minha', 'eu', 'comigo', 'de mim'), passe usar_rosto_do_augusto=true: o Hermes anexa as 4 fotos de referência do rosto dele. " +
+      "Leva de 1 a 4 minutos: se voltar status 'gerando', chame de novo SÓ com o job_id (sem prompt, senão gera outra) até vir 'pronto'. Entregue ao Augusto o imagem_url. Uma imagem por vez.",
+    inputSchema: {
+      prompt: z.string().optional().describe("Comando de criação, como o Augusto digitaria no chat. Ex.: 'Faz uma imagem minha palestrando num palco'"),
+      usar_rosto_do_augusto: z.boolean().optional().describe("true quando a imagem tiver o Augusto: anexa as 4 fotos de referência do rosto dele"),
+      job_id: z.string().optional().describe("Para continuar esperando uma imagem que voltou com status 'gerando' (não mande prompt junto)"),
+      chat_url: z.string().optional().describe("Outro chat do ChatGPT (https://chatgpt.com/...). Padrão: o chat do projeto Imagens Reels"),
+    },
+  }, (async (a: { prompt?: string; usar_rosto_do_augusto?: boolean; job_id?: string; chat_url?: string }) => {
+    const actor = getActor();
+    try {
+      const { previa_base64, ...r } = await hermesGerar(a);
+      await logCall(actor, "gerar_imagem", a, "ok", r.imagem_url ?? r.status);
+      if (r.status !== "pronto") {
+        return textResult({ ...r, proximo_passo: `Ainda gerando. Chame gerar_imagem de novo com job_id="${r.job_id}" (sem prompt).` });
+      }
+      return {
+        content: [
+          ...(previa_base64 ? [{ type: "image" as const, data: previa_base64, mimeType: "image/jpeg" }] : []),
+          { type: "text" as const, text: JSON.stringify({ ...r, observacao: "imagem_url é o arquivo original (fica 30 dias). A imagem acima é só uma prévia reduzida." }, null, 2) },
+        ],
+      };
+    } catch (err) {
+      await logCall(actor, "gerar_imagem", a, "error", (err as Error).message);
+      return errorResult(err);
+    }
+  }) as any);
 
   // ------------------------------------------------- biblioteca de edição
   // A memória online de COMO editar os vídeos do Titã. Ler antes de editar;

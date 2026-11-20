@@ -1,0 +1,33 @@
+# Na VPS do Titã: /docker/hermes. Rotas no mesmo domínio do CRM, por caminho:
+#   /hermes/tela/vnc.html  -> tela do Chrome (noVNC), com usuário e senha
+#   /hermes/api/...        -> API (Bearer HERMES_TOKEN; /img/... é público)
+# Regras mais longas que Host(...) ganham do roteador do CRM no Traefik.
+services:
+  hermes:
+    build: .
+    image: hermes:latest
+    restart: unless-stopped
+    shm_size: 1gb
+    mem_limit: 1600m
+    env_file: .env
+    volumes:
+      - ./data:/data
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.hermes-tela.rule=Host(`${DOMINIO}`) && PathPrefix(`/hermes/tela`)
+      - traefik.http.routers.hermes-tela.entrypoints=websecure
+      - traefik.http.routers.hermes-tela.tls.certresolver=letsencrypt
+      - traefik.http.routers.hermes-tela.service=hermes-tela
+      - traefik.http.routers.hermes-tela.middlewares=hermes-auth,hermes-tela-strip
+      - traefik.http.middlewares.hermes-auth.basicauth.users=${TELA_HTPASSWD}
+      - traefik.http.middlewares.hermes-tela-strip.stripprefix.prefixes=/hermes/tela
+      - traefik.http.services.hermes-tela.loadbalancer.server.port=6080
+
+      - traefik.http.routers.hermes-api.rule=Host(`${DOMINIO}`) && PathPrefix(`/hermes/api`)
+      - traefik.http.routers.hermes-api.entrypoints=websecure
+      - traefik.http.routers.hermes-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.hermes-api.service=hermes-api
+      - traefik.http.routers.hermes-api.middlewares=hermes-api-strip
+      - traefik.http.middlewares.hermes-api-strip.stripprefix.prefixes=/hermes/api
+      - traefik.http.services.hermes-api.loadbalancer.server.port=8080

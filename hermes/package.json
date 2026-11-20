@@ -1,0 +1,9 @@
+{
+  "name": "hermes",
+  "private": true,
+  "type": "module",
+  "description": "Manda comandos num chat do ChatGPT pelo Chrome logado e devolve a imagem gerada.",
+  "dependencies": {
+    "playwright-core": "1.49.1"
+  }
+}
