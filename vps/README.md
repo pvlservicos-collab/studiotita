@@ -1,17 +1,19 @@
-# VPS do postador
+# Postador na VPS do Titã
 
-A VPS (Hostinger KVM 1, `srv2157937.hstgr.cloud`) guarda os vídeos que vão para o
-Instagram e roda o cron das postagens agendadas. Ela também hospeda outro projeto
-(figurinhas/stickersdamana): nada daqui mexe nele.
+O postador roda na VPS do Titã (Hostinger, Boston, `srv2009990.hstgr.cloud`, a mesma do
+TitaCRM), em `/docker/postador`, como um projeto Docker separado. O Traefik que já existe
+(`/docker/traefik`) faz o HTTPS. Nada daqui mexe no CRM nem na Evolution.
 
-| O quê | Onde na VPS |
+| O quê | Onde |
 |---|---|
-| Serviço de upload (`upload.py`) | `/opt/studiotita/upload.py`, systemd `studiotita-upload` (127.0.0.1:3311) |
-| Segredo compartilhado | `/etc/studiotita/postagem.env` (`POSTAGEM_SECRET`, o mesmo da Vercel) |
-| Vídeos e capas | `/srv/studiotita/videos/`, servidos em `https://srv2157937.hstgr.cloud/v/` |
-| nginx | `/etc/nginx/sites-available/studiotita-videos` (HTTPS pelo certbot) |
-| Cron | `/etc/cron.d/studiotita-postagens`: de 5 em 5 min chama `/api/postagens/cron`; todo dia apaga arquivos com mais de 30 dias |
+| Upload assinado (`upload.py`) | container `upload`, rotas `/upload/` e `/fetch/` |
+| Vídeos e capas | `/docker/postador/videos/`, servidos pelo container `files` em `https://srv2009990.hstgr.cloud/v/` |
+| Segredo compartilhado | `/docker/postador/.env` (`POSTAGEM_SECRET`, o mesmo da Vercel) |
+| Cron | `/etc/cron.d/postador`: de 5 em 5 min chama `/api/postagens/cron`; todo dia apaga arquivos com mais de 30 dias |
 
-Na Vercel: `VPS_VIDEOS_URL=https://srv2157937.hstgr.cloud` e `POSTAGEM_SECRET`.
+O Traefik corta requisições com mais de 60 s, por isso a página manda o vídeo em partes
+de 4 MB (`&parte=N&total=T`).
 
-Para reinstalar, rode `vps/setup.sh` na VPS (como root) com o `POSTAGEM_SECRET` no ambiente.
+Na Vercel: `VPS_VIDEOS_URL=https://srv2009990.hstgr.cloud` e `POSTAGEM_SECRET`.
+
+Atualizar: copie os arquivos desta pasta para `/docker/postador` e rode `bash install.sh`.

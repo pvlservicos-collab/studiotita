@@ -2,6 +2,8 @@
 Serviço de upload do postador (VPS). Roda em 127.0.0.1:3311, atrás do nginx.
 
   PUT  /upload/<id>/<video|capa>?exp=..&sig=..   corpo = o arquivo
+       ...&parte=N&total=T                       em partes (cada PUT curto: o Traefik corta
+                                                  requisições com mais de 60 s); a última monta o arquivo
   POST /fetch/<id>/<video|capa>?exp=..&sig=..    {"url": "..."}: a VPS baixa o arquivo
 
 A assinatura é HMAC-SHA256(POSTAGEM_SECRET, "<id>.<kind>.<exp>"), gerada pelo
@@ -21,8 +23,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 SECRET = os.environ["POSTAGEM_SECRET"].encode()
-VIDEOS_DIR = os.environ.get("VIDEOS_DIR", "/srv/studiotita/videos")
-PUBLIC_BASE = os.environ.get("PUBLIC_BASE", "https://srv2157937.hstgr.cloud").rstrip("/")
+VIDEOS_DIR = os.environ.get("VIDEOS_DIR", "/srv/videos")
+PUBLIC_BASE = os.environ.get("PUBLIC_BASE", "https://srv2009990.hstgr.cloud").rstrip("/")
+BIND = os.environ.get("BIND", "127.0.0.1")
 ORIGINS = {o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "https://studiotita.vercel.app").split(",") if o.strip()}
 MAX_BYTES = {"video": 1024 * 1024 * 1024, "capa": 15 * 1024 * 1024}
 EXT = {"video": "mp4", "capa": "jpg"}
@@ -79,25 +82,30 @@ class Handler(BaseHTTPRequestHandler):
         name = f"{pid}-{kind}.{EXT[kind]}"
         return kind, os.path.join(VIDEOS_DIR, name), f"{PUBLIC_BASE}/v/{name}"
 
-    def save(self, src, kind, path, length=None):
-        tmp = path + ".part"
-        total = 0
-        with open(tmp, "wb") as f:
+    def save(self, src, kind, path, length=None, tmp=None, mode="wb", finish=True):
+        tmp = tmp or path + ".part"
+        # total = o arquivo inteiro até aqui (partes anteriores + esta); got = só esta requisição
+        total = os.path.getsize(tmp) if mode == "ab" and os.path.exists(tmp) else 0
+        got = 0
+        with open(tmp, mode) as f:
             while True:
-                chunk = src.read(min(1 << 20, length - total) if length is not None else 1 << 20)
+                chunk = src.read(min(1 << 20, length - got) if length is not None else 1 << 20)
                 if not chunk:
                     break
+                got += len(chunk)
                 total += len(chunk)
                 if total > MAX_BYTES[kind]:
                     f.close()
                     os.remove(tmp)
                     raise ValueError("arquivo maior que o limite")
                 f.write(chunk)
-                if length is not None and total >= length:
+                if length is not None and got >= length:
                     break
         if total == 0:
             os.remove(tmp)
             raise ValueError("arquivo vazio")
+        if not finish:
+            return total
         os.replace(tmp, path)
         os.chmod(path, 0o644)
         return total
@@ -115,11 +123,37 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(411, {"error": "envie o arquivo com Content-Length"})
         if length > MAX_BYTES[kind]:
             return self.reply(413, {"error": "arquivo maior que o limite"})
+        qs = parse_qs(urlparse(self.path).query)
         try:
-            size = self.save(self.rfile, kind, path, length)
+            parte = int(qs.get("parte", ["-1"])[0])
+            partes = int(qs.get("total", ["1"])[0])
+        except ValueError:
+            return self.reply(400, {"error": "parte/total inválidos"})
+        try:
+            if parte < 0:  # o arquivo inteiro num PUT só
+                size = self.save(self.rfile, kind, path, length)
+                return self.reply(200, {"url": public, "bytes": size})
+            # em partes, na ordem: a 0 começa do zero; cada uma confere qual era a esperada
+            tmp, counter = path + ".chunks", path + ".next"
+            esperada = 0
+            if parte > 0:
+                try:
+                    esperada = int(open(counter).read())
+                except (OSError, ValueError):
+                    esperada = -1
+            if parte != esperada:
+                return self.reply(409, {"error": f"parte fora de ordem: esperava {esperada}", "esperada": esperada})
+            ultima = parte >= partes - 1
+            size = self.save(self.rfile, kind, path, length, tmp=tmp, mode="wb" if parte == 0 else "ab", finish=ultima)
+            if ultima:
+                if os.path.exists(counter):
+                    os.remove(counter)
+                return self.reply(200, {"url": public, "bytes": size})
+            with open(counter, "w") as f:
+                f.write(str(parte + 1))
+            self.reply(200, {"parte": parte, "recebido": size})
         except ValueError as e:
             return self.reply(400, {"error": str(e)})
-        self.reply(200, {"url": public, "bytes": size})
 
     def do_POST(self):
         t = self.target("fetch")
@@ -151,4 +185,4 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     os.makedirs(VIDEOS_DIR, exist_ok=True)
     shutil.disk_usage(VIDEOS_DIR)
-    ThreadingHTTPServer(("127.0.0.1", 3311), Handler).serve_forever()
+    ThreadingHTTPServer((BIND, 3311), Handler).serve_forever()

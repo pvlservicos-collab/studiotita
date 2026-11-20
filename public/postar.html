@@ -428,10 +428,28 @@
     try {
       // os links assinados valem 6 h: pede de novo para não vencer no meio
       state = await call("GET", api);
-      await put(state.upload.video.enviar, file, file.type || "video/mp4", (f) => {
+      // em partes de 4 MB: cada envio é curto (o proxy da VPS corta requisições com mais de 60 s)
+      const CHUNK = 4 * 1024 * 1024;
+      const total = Math.max(1, Math.ceil(file.size / CHUNK));
+      const show = (f) => {
         bar.firstElementChild.style.width = Math.round(f * 100) + "%";
         txt.textContent = "Enviando " + Math.round(f * 100) + "% de " + (file.size / 1048576).toFixed(0) + " MB…";
-      });
+      };
+      for (let i = 0; i < total; i++) {
+        const part = file.slice(i * CHUNK, Math.min(file.size, (i + 1) * CHUNK));
+        const url = state.upload.video.enviar + "&parte=" + i + "&total=" + total;
+        for (let tentativa = 1; ; tentativa++) {
+          try {
+            await put(url, part, "application/octet-stream", (f) => show((i * CHUNK + f * part.size) / file.size));
+            break;
+          } catch (err) {
+            // a parte chegou, só a resposta se perdeu: a VPS já espera a próxima
+            if (String(err.message).includes('"esperada": ' + (i + 1))) break;
+            if (tentativa >= 3) throw err;
+            await new Promise((r) => setTimeout(r, 2000 * tentativa));
+          }
+        }
+      }
       txt.textContent = "Registrando…";
       uploading = false;
       state = await call("PATCH", api, { video_url: state.upload.video.publico + "?v=" + Date.now() });

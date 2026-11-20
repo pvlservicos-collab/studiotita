@@ -276,6 +276,9 @@ export function registerTools(server: McpServer) {
     return {
       ...resumo(atual),
       enviar_video_pelo_terminal: `curl -fT "CAMINHO/DO/VIDEO.mp4" -H "content-type: video/mp4" "${links.video.enviar}"`,
+      video_grande:
+        "O proxy da VPS corta cada envio que passar de 60 s. Se o vídeo for grande ou a conexão lenta, mande em partes de até 4 MB, na ordem, " +
+        "acrescentando &parte=N&total=T ao mesmo link (N começa em 0). A última parte monta o arquivo.",
       ...(avisos.length ? { avisos } : {}),
       proximo_passo: "Mande o link_para_o_augusto. Ele confere os campos e clica em Postar ou Agendar. Para acompanhar, use ver_postagem.",
     };
