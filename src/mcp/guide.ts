@@ -12,6 +12,13 @@ export const MCP_TOOL_GROUPS: { group: string; tools: { name: string; what: stri
     tools: [{ name: "get_app_guide", what: "Este guia + contagens atuais do banco." }],
   },
   {
+    group: "Postador (o Augusto posta, você prepara)",
+    tools: [
+      { name: "preparar_postagem", what: "Cria o rascunho e devolve o link temporário em que o Augusto confere os campos e clica em Postar ou Agendar." },
+      { name: "ver_postagem", what: "Status de uma postagem (ou as 10 últimas) e o link do Instagram quando sair." },
+    ],
+  },
+  {
     group: "Biblioteca de Edição (memória de como editar os vídeos do Titã)",
     tools: [
       { name: "list_edit_library", what: "Índice: formatos de vídeo, guias, regras do Augusto e referências de concorrentes." },
@@ -146,6 +153,9 @@ Este app é, antes de tudo, a memória online de COMO os vídeos do Titã (Augus
 
 BIBLIOTECA DE FORMATOS
 Os formatos de vídeo do Augusto (metadinha, talking head no estúdio, vlog caminhando, carro vlog, esquete, caixinha de perguntas, split comparativo...) são as notas kind='formato' da Biblioteca de Edição: list_edit_library(kind='formato') lista, get_edit_briefing(slug) traz a ficha completa com as regras, get_format_metrics mostra qual formato performa melhor no perfil dele. A página é ${appUrl()}/ (aba Edição).
+
+POSTADOR
+Quando o vídeo do Augusto estiver pronto e ele quiser postar, chame preparar_postagem com a legenda (no tom dele) e o vídeo, e mande o link_para_o_augusto. Você NUNCA publica nem agenda: quem clica em Postar ou Agendar é ele, na página do link, onde também edita cada campo. O vídeo chega à VPS por video_url (link direto e público), pelo comando 'enviar_video_pelo_terminal' (se você tiver terminal) ou arrastado por ele na página. Acompanhe com ver_postagem.
 
 BILBO 🥸 E O QUE ESTÁ EM ALTA
 O Bilbo vigia os concorrentes escolhidos (hoje, os internacionais; os brasileiros ficam em Concorrência, mas fora da vigília) e todo dia atualiza os posts deles e separa os que mais performaram em relação à mediana do próprio perfil. Concorrente novo (add_competitors) já entra na vigília. O ranking de em alta só mostra os vigiados; para um perfil fora da vigília, passe o username.

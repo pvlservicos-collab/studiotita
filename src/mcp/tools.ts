@@ -67,6 +67,7 @@ import {
   formatMetrics,
   setVideoFormat,
 } from "@/lib/services/editLibrary";
+import { createPostagem, getById, PostagemInputError, resumo, uploadLinks, vpsFetch, type PostagemRow } from "@/lib/services/postagens";
 import { MCP_INSTRUCTIONS, renderToolList } from "@/mcp/guide";
 import type { AnalysisRow, VideoRow } from "@/lib/types";
 
@@ -210,6 +211,89 @@ export function registerTools(server: McpServer) {
     },
   }, async (a: { video_id: string; subject?: string; instructions?: string; scenes?: boolean }) =>
     scriptFromPost(a.video_id, { subject: a.subject, instructions: a.instructions, scenes: a.scenes }, `claude:${getActor()}`));
+
+  // ------------------------------------------------------------ postador
+  // O Claude só PREPARA: quem posta é o Augusto, clicando no link temporário.
+  tool<{
+    titulo?: string;
+    legenda?: string;
+    video_url?: string;
+    capa_url?: string;
+    mostrar_no_feed?: boolean;
+    colaboradores?: string[];
+    marcar_pessoas?: string[];
+    nome_do_audio?: string;
+    primeiro_comentario?: string;
+    permitir_comentarios?: boolean;
+    reel_de_teste?: "MANUAL" | "SS_PERFORMANCE";
+  }>("preparar_postagem", {
+    title: "Preparar uma postagem no Instagram (o Augusto revisa e posta)",
+    description:
+      "Quando o vídeo do Augusto estiver pronto e ele quiser postar: cria um rascunho e devolve um LINK TEMPORÁRIO (vale 14 dias) para ele abrir, " +
+      "ver o vídeo, conferir cada campo da Meta (legenda, capa, feed, colaboradores, marcações, áudio, reel de teste, comentários) e clicar em Postar ou Agendar. " +
+      "Você NUNCA publica: só prepara e manda o link. O vídeo vai para a VPS de um destes jeitos: (1) video_url = link direto e público do arquivo, a VPS baixa; " +
+      "(2) se você tem terminal, rode o comando 'enviar_video_pelo_terminal' da resposta; (3) senão, o Augusto arrasta o arquivo na própria página. " +
+      "Preencha a legenda no tom do Augusto (até 2.200 caracteres, 30 hashtags).",
+    inputSchema: {
+      titulo: z.string().optional().describe("Nome interno da postagem (só aparece para o Augusto)"),
+      legenda: z.string().optional(),
+      video_url: z.string().optional().describe("Link DIRETO e público do mp4/mov (a VPS baixa). Vazio = enviar pelo terminal ou pela página"),
+      capa_url: z.string().optional().describe("Link direto e público de uma imagem JPEG de capa (opcional)"),
+      mostrar_no_feed: z.boolean().optional().describe("true (padrão) = aparece no feed e na aba Reels; false = só na aba Reels"),
+      colaboradores: z.array(z.string()).optional().describe("Até 3 @ convidados como colaboradores"),
+      marcar_pessoas: z.array(z.string()).optional().describe("@ marcados no reel (até 20)"),
+      nome_do_audio: z.string().optional().describe("Renomeia o áudio original"),
+      primeiro_comentario: z.string().optional().describe("Comentário feito pelo perfil logo depois de publicar"),
+      permitir_comentarios: z.boolean().optional(),
+      reel_de_teste: z.enum(["MANUAL", "SS_PERFORMANCE"]).optional().describe("Reel de teste (mostra primeiro só para não seguidores)"),
+    },
+  }, async (a) => {
+    const p = await createPostagem(
+      {
+        title: a.titulo,
+        caption: a.legenda,
+        share_to_feed: a.mostrar_no_feed,
+        collaborators: a.colaboradores,
+        user_tags: a.marcar_pessoas,
+        audio_name: a.nome_do_audio,
+        first_comment: a.primeiro_comentario,
+        comments_enabled: a.permitir_comentarios,
+        trial_strategy: a.reel_de_teste ?? null,
+      },
+      `claude:${getActor()}`
+    );
+    const avisos: string[] = [];
+    const links = uploadLinks(p.id);
+    for (const [kind, url] of [["video", a.video_url], ["capa", a.capa_url]] as const) {
+      if (!url) continue;
+      try {
+        await vpsFetch(p.id, kind, url);
+      } catch (e) {
+        avisos.push((e as Error).message);
+      }
+    }
+    const atual = (await getById(p.id))!;
+    return {
+      ...resumo(atual),
+      enviar_video_pelo_terminal: `curl -fT "CAMINHO/DO/VIDEO.mp4" -H "content-type: video/mp4" "${links.video.enviar}"`,
+      ...(avisos.length ? { avisos } : {}),
+      proximo_passo: "Mande o link_para_o_augusto. Ele confere os campos e clica em Postar ou Agendar. Para acompanhar, use ver_postagem.",
+    };
+  });
+
+  tool("ver_postagem", {
+    title: "Ver uma postagem preparada",
+    description: "Status de uma postagem preparada (rascunho, agendado, publicando, publicado, erro), com o link do Instagram quando sair. Sem id, lista as 10 mais recentes.",
+    inputSchema: { id: z.string().optional().describe("id que veio em preparar_postagem") },
+  }, async (a: { id?: string }) => {
+    if (a.id) {
+      const p = await getById(a.id);
+      if (!p) throw new PostagemInputError("Postagem não encontrada.");
+      return resumo(p);
+    }
+    const rows = await query<PostagemRow>(`select * from postagens order by created_at desc limit 10`);
+    return rows.map(resumo);
+  });
 
   // ------------------------------------------------- biblioteca de edição
   // A memória online de COMO editar os vídeos do Titã. Ler antes de editar;

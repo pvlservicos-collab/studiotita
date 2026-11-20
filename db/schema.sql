@@ -427,7 +427,43 @@ create table if not exists bilbo_runs (
 );
 -- cópia permanente da capa (a da Meta expira)
 alter table videos add column if not exists thumb_blob text;
--- começa vigiando Caio Carneiro e Eslen Delanogare
+-- começa vigiando Caio Carneiro e Eslen Delanogare — só num banco novo (vigília vazia);
+-- sem esse "not exists", cada migrate recolocava os dois depois de serem tirados
 insert into bilbo_watch (competitor_id, position)
-  select id, case username when 'caiocarneiro' then 0 else 1 end from competitors where username in ('caiocarneiro', 'eslen.delanogare')
+  select id, case username when 'caiocarneiro' then 0 else 1 end from competitors
+   where username in ('caiocarneiro', 'eslen.delanogare') and not exists (select 1 from bilbo_watch)
   on conflict (competitor_id) do nothing;
+
+-- Postador: o Claude do Augusto prepara a postagem pelo conector; o Augusto revisa no
+-- link temporário (/postar/<token>) e clica em Postar ou Agendar. O vídeo fica na VPS.
+create table if not exists postagens (
+  id            uuid primary key default gen_random_uuid(),
+  token         text not null unique,
+  status        text not null default 'rascunho', -- rascunho | agendado | fila | processando | publicado | erro
+  title         text,
+  video_url     text,          -- link público do vídeo na VPS (a Meta busca daqui)
+  cover_url     text,          -- capa enviada (opcional)
+  caption       text not null default '',
+  share_to_feed boolean not null default true,
+  thumb_offset  int,           -- ms do frame usado como capa (quando não há cover_url)
+  audio_name    text,
+  location_id   text,
+  user_tags     text[] not null default '{}',
+  collaborators text[] not null default '{}',
+  trial_strategy text,         -- null = reel normal; MANUAL | SS_PERFORMANCE = reel de teste
+  comments_enabled boolean not null default true,
+  first_comment text,
+  scheduled_at  timestamptz,
+  container_id  text,
+  media_id      text,
+  permalink     text,
+  error_message text,
+  attempts      int not null default 0,
+  locked_until  timestamptz,
+  created_by    text,
+  expires_at    timestamptz not null default now() + interval '14 days',
+  published_at  timestamptz,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+create index if not exists idx_postagens_status on postagens (status, scheduled_at);

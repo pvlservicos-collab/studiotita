@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="referrer" content="no-referrer" />
+<title>Postar no Instagram</title>
+<link rel="icon" href="/icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0b0a08;
+    --panel: #14120e;
+    --panel-2: #1b1813;
+    --line: rgba(212, 175, 55, 0.18);
+    --line-strong: rgba(212, 175, 55, 0.45);
+    --gold: #d4af37;
+    --gold-2: #f1d98a;
+    --gold-deep: #9c7a1c;
+    --text: #ece6d6;
+    --muted: #9a917c;
+    --faint: #6b6453;
+    --ok: #7fc99a;
+    --bad: #e58a7a;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; font-size: 14px; }
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(900px 500px at 85% -10%, rgba(212, 175, 55, 0.10), transparent 60%),
+      radial-gradient(700px 420px at -10% 110%, rgba(212, 175, 55, 0.07), transparent 60%),
+      var(--bg);
+  }
+  a { color: var(--gold-2); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 16px 60px; }
+  header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
+  .eyebrow { font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+  h1 { font-family: "Cormorant Garamond", serif; font-weight: 600; font-size: 34px; margin: 4px 0 0; letter-spacing: 0.01em; }
+  h1 em { font-style: normal; background: linear-gradient(180deg, var(--gold-2), var(--gold) 60%, var(--gold-deep)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--muted); font-size: 12px; }
+  .grid { display: grid; grid-template-columns: minmax(280px, 420px) 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(241, 217, 138, 0.06); }
+  .left { padding: 16px; position: sticky; top: 16px; }
+  @media (max-width: 900px) { .left { position: static; } }
+  .phone { aspect-ratio: 9 / 16; width: 100%; border-radius: 22px; overflow: hidden; background: #050504; border: 1px solid var(--line-strong); position: relative; display: flex; align-items: center; justify-content: center; }
+  .phone video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+  .drop { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 24px; cursor: pointer; color: var(--muted); border: 1px dashed transparent; border-radius: 22px; transition: 0.2s; }
+  .drop:hover, .drop.over { border-color: var(--gold); color: var(--text); background: rgba(212, 175, 55, 0.05); }
+  .drop .big { font-family: "Cormorant Garamond", serif; font-size: 26px; color: var(--gold-2); }
+  .bar { height: 4px; border-radius: 4px; background: rgba(212, 175, 55, 0.12); overflow: hidden; width: 80%; }
+  .bar > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gold-deep), var(--gold-2)); transition: width 0.2s; }
+  .bar.ind > i { width: 35%; animation: ind 1.2s infinite ease-in-out; }
+  @keyframes ind { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+  .vidtools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; justify-content: space-between; }
+  .right { padding: 22px; }
+  .section { padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .section:last-of-type { border-bottom: 0; }
+  .section h3 { margin: 0 0 4px; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+  .hint { color: var(--faint); font-size: 12px; margin: 2px 0 10px; line-height: 1.45; }
+  label.f { display: block; margin-top: 12px; font-size: 12px; color: var(--muted); font-weight: 500; }
+  input[type="text"], input[type="datetime-local"], textarea, select {
+    width: 100%; margin-top: 6px; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--line); background: #0e0d0a; color: var(--text);
+    font: inherit; outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  textarea { min-height: 170px; resize: vertical; line-height: 1.5; }
+  input:focus, textarea:focus, select:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.14); }
+  input:disabled, textarea:disabled, select:disabled { opacity: 0.6; }
+  .counters { display: flex; gap: 14px; justify-content: flex-end; font-size: 11px; color: var(--faint); margin-top: 6px; }
+  .counters .over { color: var(--bad); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: #0e0d0a; }
+  .toggle b { display: block; font-weight: 600; font-size: 13px; }
+  .toggle span { color: var(--faint); font-size: 12px; }
+  .switch { position: relative; width: 44px; height: 24px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch i { position: absolute; inset: 0; border-radius: 99px; background: #2a261d; border: 1px solid var(--line); transition: 0.2s; cursor: pointer; }
+  .switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted); transition: 0.2s; }
+  .switch input:checked + i { background: linear-gradient(180deg, var(--gold), var(--gold-deep)); border-color: var(--gold); }
+  .switch input:checked + i::after { left: 23px; background: #1a160c; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .seg button { flex: 1 1 auto; }
+  .btn { border: 1px solid var(--line-strong); background: transparent; color: var(--text); padding: 10px 16px; border-radius: 99px; font: inherit; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.15s; }
+  .btn:hover:not(:disabled) { border-color: var(--gold); color: var(--gold-2); }
+  .btn.sm { padding: 7px 12px; font-size: 12px; }
+  .btn.on { border-color: var(--gold); color: #1a160c; background: linear-gradient(180deg, var(--gold-2), var(--gold)); }
+  .btn.gold { border: 0; color: #1a160c; background: linear-gradient(180deg, var(--gold-2), var(--gold) 55%, var(--gold-deep)); box-shadow: 0 8px 30px rgba(212, 175, 55, 0.25); }
+  .btn.gold:hover:not(:disabled) { filter: brightness(1.06); color: #1a160c; }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; justify-content: space-between; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line-strong); }
+  .actions .sched { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+  .actions .sched input { width: 220px; margin-top: 0; }
+  .status { margin-bottom: 16px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: #0e0d0a; display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 8px; }
+  .status.ok { border-color: rgba(127, 201, 154, 0.4); } .status.ok .dot { background: var(--ok); }
+  .status.bad { border-color: rgba(229, 138, 122, 0.45); color: #f3c4ba; } .status.bad .dot { background: var(--bad); }
+  .status.wait .dot { background: var(--gold); box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.18); }
+  .saved { font-size: 11px; color: var(--faint); }
+  .msg { min-height: 18px; font-size: 12px; color: var(--bad); margin-top: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { border: 1px solid var(--line-strong); border-radius: 99px; padding: 4px 10px; font-size: 12px; color: var(--gold-2); }
+  .cover-prev { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+  .cover-prev img { width: 54px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line-strong); }
+  .center { display: flex; min-height: 60vh; align-items: center; justify-content: center; text-align: center; color: var(--muted); }
+  footer { margin-top: 26px; text-align: center; color: var(--faint); font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="center">Carregando a postagem…</div></div>
+
+<script>
+(() => {
+  const token = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
+  const api = "/api/postagens/" + encodeURIComponent(token);
+  const $ = (s, el = document) => el.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmt = (d) => d ? new Date(d).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
+  const EDITAVEL = ["rascunho", "agendado", "erro"];
+
+  let state = null;      // { postagem, upload, conta }
+  let dirty = {};        // campos alterados ainda não salvos
+  let saveTimer = null;
+  let pollTimer = null;
+  let uploading = false;
+
+  async function call(method, url, body) {
+    const r = await fetch(url, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || "Erro " + r.status);
+    return d;
+  }
+
+  async function load() {
+    try {
+      state = await call("GET", api);
+      render();
+      schedulePoll();
+    } catch (e) {
+      $("#app").innerHTML = '<div class="center"><div><h1><em>Link indisponível</em></h1><p class="sub">' + esc(e.message) + "</p></div></div>";
+    }
+  }
+
+  function schedulePoll() {
+    clearTimeout(pollTimer);
+    const s = state?.postagem?.status;
+    const ms = s === "fila" || s === "processando" ? 5000 : s === "agendado" ? 30000 : 0;
+    if (ms) pollTimer = setTimeout(async () => {
+      try { state = await call("GET", api); refreshStatus(); } catch {}
+      schedulePoll();
+    }, ms);
+  }
+
+  // ---------------------------------------------------------------- render
+  function render() {
+    const p = state.postagem;
+    const can = EDITAVEL.includes(p.status) && !uploading;
+    const dis = can ? "" : "disabled";
+    $("#app").innerHTML = `
+      <header>
+        <div>
+          <div class="eyebrow">Postar no Instagram · @${esc(state.conta)}</div>
+          <h1>${esc(p.title) || "<em>Novo reel</em>"}</h1>
+          <div class="sub">Link temporário · vale até ${fmt(p.expires_at)} · preparado por ${esc(p.created_by || "Claude")}</div>
+        </div>
+        <span class="saved" id="saved"></span>
+      </header>
+      <div class="grid">
+        <div class="panel left">
+          <div class="phone" id="phone">${videoArea(p)}</div>
+          <div class="vidtools" id="vidtools"></div>
+        </div>
+        <div class="panel right">
+          <div id="status"></div>
+
+          <div class="section">
+            <h3>Legenda</h3>
+            <textarea id="caption" ${dis} placeholder="Escreva a legenda…">${esc(p.caption)}</textarea>
+            <div class="counters" id="counters"></div>
+          </div>
+
+          <div class="section">
+            <h3>Capa</h3>
+            <p class="hint">Escolha um frame do vídeo (pause no ponto certo e clique em “Usar este frame”) ou envie uma imagem. A imagem enviada tem prioridade.</p>
+            <div class="cover-prev" id="coverPrev"></div>
+            <div class="seg">
+              <button class="btn sm" id="useFrame" ${dis}>Usar este frame</button>
+              <button class="btn sm" id="pickCover" ${dis}>Enviar imagem de capa</button>
+              <button class="btn sm" id="clearCover" ${dis}>Tirar a capa</button>
+            </div>
+            <input type="file" id="coverFile" accept="image/*" hidden />
+          </div>
+
+          <div class="section">
+            <h3>Onde aparece</h3>
+            ${toggle("share_to_feed", "Mostrar também no feed", "Desligado, o reel aparece só na aba Reels.", p.share_to_feed, dis)}
+            <label class="f">Reel de teste</label>
+            <p class="hint">Um reel de teste aparece primeiro só para quem não segue o perfil. Dá para promover ao perfil depois.</p>
+            <div class="seg" id="trial">
+              ${segBtn("", "Reel normal", p.trial_strategy, dis)}
+              ${segBtn("MANUAL", "Teste · eu promovo", p.trial_strategy, dis)}
+              ${segBtn("SS_PERFORMANCE", "Teste · promove se for bem", p.trial_strategy, dis)}
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Pessoas</h3>
+            <label class="f">Colaboradores (até 3, separados por vírgula)</label>
+            <input type="text" id="collaborators" ${dis} value="${esc(p.collaborators.join(", "))}" placeholder="@perfil1, @perfil2" />
+            <p class="hint">Recebem um convite; o reel aparece no perfil deles quando aceitarem.</p>
+            <label class="f">Marcar pessoas (até 20, separadas por vírgula)</label>
+            <input type="text" id="user_tags" ${dis} value="${esc(p.user_tags.join(", "))}" placeholder="@perfil" />
+          </div>
+
+          <div class="section">
+            <h3>Detalhes</h3>
+            <div class="row">
+              <div>
+                <label class="f">Nome do áudio</label>
+                <input type="text" id="audio_name" ${dis} value="${esc(p.audio_name)}" placeholder="Áudio original" />
+                <p class="hint">Só renomeia o áudio original do vídeo. Não dá para trocar depois.</p>
+              </div>
+              <div>
+                <label class="f">Localização (ID da Página do lugar)</label>
+                <input type="text" id="location_id" ${dis} value="${esc(p.location_id)}" placeholder="ex.: 106377336067638" />
+                <p class="hint">O ID numérico da Página do Facebook do lugar (precisa ter endereço).</p>
+              </div>
+            </div>
+            <label class="f">Título interno (só para você)</label>
+            <input type="text" id="title" ${dis} value="${esc(p.title)}" />
+          </div>
+
+          <div class="section">
+            <h3>Comentários</h3>
+            ${toggle("comments_enabled", "Permitir comentários", "Aplicado logo depois de publicar.", p.comments_enabled, dis)}
+            <label class="f">Primeiro comentário (opcional)</label>
+            <textarea id="first_comment" ${dis} style="min-height:70px" placeholder="Feito pelo @${esc(state.conta)} assim que o reel sair">${esc(p.first_comment)}</textarea>
+          </div>
+
+          <div class="actions" id="actions"></div>
+          <div class="msg" id="msg"></div>
+        </div>
+      </div>
+      <footer>Ninguém publica por você: o reel só sai quando você clica em Postar ou quando chega o horário que você agendou.</footer>`;
+    bind();
+    refreshStatus();
+    counters();
+    coverPreview();
+  }
+
+  const toggle = (id, title, hint, on, dis) => `
+    <div class="toggle"><div><b>${title}</b><span>${hint}</span></div>
+      <label class="switch"><input type="checkbox" id="${id}" ${on ? "checked" : ""} ${dis} /><i></i></label></div>`;
+  const segBtn = (val, label, cur, dis) => `<button class="btn sm ${(cur || "") === val ? "on" : ""}" data-trial="${val}" ${dis}>${label}</button>`;
+
+  function videoArea(p) {
+    if (p.video_url) return `<video id="video" src="${esc(p.video_url)}" controls playsinline preload="metadata"></video>`;
+    if (!EDITAVEL.includes(p.status)) return `<div class="drop">Sem vídeo</div>`;
+    return `<label class="drop" id="drop">
+        <div class="big">Arraste o vídeo aqui</div>
+        <div>ou clique para escolher · MP4 ou MOV, vertical 9:16, de 3 s a 15 min</div>
+        <div class="bar" id="upbar" hidden><i></i></div>
+        <div id="uptext" class="sub"></div>
+        <input type="file" id="videoFile" accept="video/mp4,video/quicktime,video/*" hidden />
+      </label>`;
+  }
+
+  function refreshStatus() {
+    const p = state.postagem;
+    const el = $("#status");
+    if (!el) return;
+    let cls = "", text = "", extra = "";
+    if (p.status === "rascunho") text = p.video_url ? "Rascunho · pronto para postar" : "Rascunho · falta enviar o vídeo";
+    if (p.status === "agendado") { cls = "wait"; text = "Agendado para " + fmt(p.scheduled_at); extra = '<button class="btn sm" id="cancelSched">Cancelar agendamento</button>'; }
+    if (p.status === "fila") { cls = "wait"; text = "Enviando para o Instagram…"; }
+    if (p.status === "processando") { cls = "wait"; text = "O Instagram está processando o vídeo… (pode levar alguns minutos; pode fechar esta página)"; }
+    if (p.status === "publicado") { cls = "ok"; text = "Publicado em " + fmt(p.published_at); extra = p.permalink ? `<a class="btn sm gold" href="${esc(p.permalink)}" target="_blank" rel="noopener noreferrer">Ver no Instagram</a>` : ""; }
+    if (p.status === "erro") { cls = "bad"; text = "Não publicou: " + (p.error_message || "erro desconhecido") + " — corrija e tente de novo."; }
+    const warn = p.status === "publicado" && p.error_message ? `<div class="sub" style="width:100%;color:#f3c4ba">${esc(p.error_message)}</div>` : "";
+    el.innerHTML = `<div class="status ${cls}"><div><span class="dot"></span>${esc(text)}</div>${extra}${warn}</div>`;
+    $("#cancelSched")?.addEventListener("click", cancelSched);
+    renderActions();
+    // quando sai de "publicando", trava/destrava os campos
+    if (render.lastStatus && render.lastStatus !== p.status && (EDITAVEL.includes(render.lastStatus) !== EDITAVEL.includes(p.status))) { render.lastStatus = p.status; render(); return; }
+    render.lastStatus = p.status;
+  }
+
+  function renderActions() {
+    const p = state.postagem;
+    const el = $("#actions");
+    if (!el) return;
+    if (!EDITAVEL.includes(p.status)) { el.innerHTML = ""; return; }
+    const pode = Boolean(p.video_url) && !uploading;
+    const def = new Date(Date.now() + 60 * 60000);
+    def.setMinutes(Math.ceil(def.getMinutes() / 5) * 5, 0, 0);
+    const local = (p.scheduled_at ? new Date(p.scheduled_at) : def);
+    const val = new Date(local.getTime() - local.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    el.innerHTML = `
+      <div class="sched">
+        <div><label class="f" style="margin-top:0">Agendar para</label><input type="datetime-local" id="when" value="${val}" /></div>
+        <button class="btn" id="schedule" ${pode ? "" : "disabled"}>${p.status === "agendado" ? "Reagendar" : "Agendar"}</button>
+      </div>
+      <button class="btn gold" id="postNow" ${pode ? "" : "disabled"}>Postar agora</button>`;
+    $("#postNow").addEventListener("click", postNow);
+    $("#schedule").addEventListener("click", schedule);
+  }
+
+  function counters() {
+    const t = $("#caption")?.value ?? "";
+    const tags = (t.match(/(^|\s)#[^\s#]+/g) || []).length;
+    const ment = (t.match(/(^|\s)@[a-z0-9._]+/gi) || []).length;
+    const c = (n, max, label) => `<span class="${n > max ? "over" : ""}">${n}/${max} ${label}</span>`;
+    const el = $("#counters");
+    if (el) el.innerHTML = c(t.length, 2200, "caracteres") + c(tags, 30, "hashtags") + c(ment, 20, "menções");
+  }
+
+  function coverPreview() {
+    const p = state.postagem;
+    const el = $("#coverPrev");
+    if (!el) return;
+    if (p.cover_url) el.innerHTML = `<img src="${esc(p.cover_url)}?t=${Date.now()}" alt="" /><span class="sub">Imagem de capa enviada</span>`;
+    else if (p.thumb_offset != null) el.innerHTML = `<span class="chip">Frame em ${(p.thumb_offset / 1000).toFixed(1).replace(".", ",")} s</span>`;
+    else el.innerHTML = `<span class="sub">Sem capa escolhida: o Instagram usa o primeiro frame.</span>`;
+  }
+
+  // ---------------------------------------------------------------- edição
+  function bind() {
+    for (const id of ["caption", "title", "audio_name", "location_id", "first_comment", "collaborators", "user_tags"]) {
+      $("#" + id)?.addEventListener("input", (e) => {
+        const v = e.target.value;
+        dirty[id] = id === "collaborators" || id === "user_tags" ? v.split(/[\s,;]+/).map((s) => s.replace(/^@/, "")).filter(Boolean) : v;
+        if (id === "caption") counters();
+        queueSave();
+      });
+    }
+    for (const id of ["share_to_feed", "comments_enabled"]) {
+      $("#" + id)?.addEventListener("change", (e) => { dirty[id] = e.target.checked; queueSave(0); });
+    }
+    document.querySelectorAll("[data-trial]").forEach((b) => b.addEventListener("click", () => {
+      dirty.trial_strategy = b.dataset.trial || null;
+      document.querySelectorAll("[data-trial]").forEach((x) => x.classList.toggle("on", x === b));
+      queueSave(0);
+    }));
+    $("#useFrame")?.addEventListener("click", () => {
+      const v = $("#video");
+      if (!v) return setMsg("Envie o vídeo primeiro.");
+      dirty.thumb_offset = Math.round(v.currentTime * 1000);
+      dirty.cover_url = null;
+      queueSave(0);
+    });
+    $("#clearCover")?.addEventListener("click", () => { dirty.thumb_offset = null; dirty.cover_url = null; queueSave(0); });
+    $("#pickCover")?.addEventListener("click", () => $("#coverFile").click());
+    $("#coverFile")?.addEventListener("change", (e) => e.target.files[0] && uploadCover(e.target.files[0]));
+
+    const drop = $("#drop");
+    if (drop) {
+      const input = $("#videoFile");
+      input.addEventListener("change", () => input.files[0] && uploadVideo(input.files[0]));
+      drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+      drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+      drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) uploadVideo(f); });
+    }
+    const v = $("#video");
+    if (v && EDITAVEL.includes(state.postagem.status)) {
+      const tools = $("#vidtools");
+      tools.innerHTML = `<span class="sub" id="vt">0,0 s</span><button class="btn sm" id="replaceVideo">Trocar vídeo</button><input type="file" id="videoFile2" accept="video/*" hidden />`;
+      v.addEventListener("timeupdate", () => { $("#vt").textContent = v.currentTime.toFixed(1).replace(".", ",") + " s"; });
+      $("#replaceVideo").addEventListener("click", () => $("#videoFile2").click());
+      $("#videoFile2").addEventListener("change", (e) => e.target.files[0] && uploadVideo(e.target.files[0]));
+    }
+  }
+
+  function setMsg(m) { const el = $("#msg"); if (el) el.textContent = m || ""; }
+  function setSaved(m) { const el = $("#saved"); if (el) el.textContent = m; }
+
+  function queueSave(ms = 700) {
+    clearTimeout(saveTimer);
+    setSaved("Salvando…");
+    saveTimer = setTimeout(save, ms);
+  }
+
+  async function save() {
+    if (!Object.keys(dirty).length) return true;
+    const body = dirty;
+    dirty = {};
+    try {
+      const was = state.postagem.status;
+      state = await call("PATCH", api, body);
+      setMsg("");
+      setSaved("Salvo " + new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+      if (was === "erro") render(); else { refreshStatus(); coverPreview(); }
+      return true;
+    } catch (e) {
+      dirty = { ...body, ...dirty };
+      setSaved("Não salvou");
+      setMsg(e.message);
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------- envio para a VPS
+  function put(url, blob, type, onProgress) {
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open("PUT", url);
+      x.setRequestHeader("content-type", type);
+      x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+      x.onload = () => (x.status >= 200 && x.status < 300 ? resolve() : reject(new Error("A VPS recusou o arquivo (" + x.status + "): " + (x.responseText || "").slice(0, 200))));
+      x.onerror = () => reject(new Error("Falha de conexão com a VPS."));
+      x.send(blob);
+    });
+  }
+
+  async function uploadVideo(file) {
+    if (!/^video\//.test(file.type) && !/\.(mp4|mov)$/i.test(file.name)) return setMsg("Escolha um arquivo de vídeo (MP4 ou MOV).");
+    if (file.size > 1024 * 1024 * 1024) return setMsg("O vídeo passa de 1 GB.");
+    uploading = true;
+    setMsg("");
+    if (!$("#drop")) { $("#phone").innerHTML = videoArea({ ...state.postagem, video_url: null, status: "rascunho" }); }
+    const bar = $("#upbar"), txt = $("#uptext");
+    bar.hidden = false;
+    renderActions();
+    try {
+      // os links assinados valem 6 h: pede de novo para não vencer no meio
+      state = await call("GET", api);
+      await put(state.upload.video.enviar, file, file.type || "video/mp4", (f) => {
+        bar.firstElementChild.style.width = Math.round(f * 100) + "%";
+        txt.textContent = "Enviando " + Math.round(f * 100) + "% de " + (file.size / 1048576).toFixed(0) + " MB…";
+      });
+      txt.textContent = "Registrando…";
+      uploading = false;
+      state = await call("PATCH", api, { video_url: state.upload.video.publico + "?v=" + Date.now() });
+      render();
+    } catch (e) {
+      uploading = false;
+      setMsg(e.message);
+      txt.textContent = "";
+      bar.hidden = true;
+      renderActions();
+    }
+  }
+
+  /** Converte qualquer imagem em JPEG (o formato que a Meta aceita na capa). */
+  function toJpeg(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        const scale = Math.min(1, 1920 / Math.max(img.width, img.height));
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob((b) => (b ? resolve(b) : reject(new Error("Não consegui ler a imagem."))), "image/jpeg", 0.9);
+        URL.revokeObjectURL(img.src);
+      };
+      img.onerror = () => reject(new Error("Não consegui ler a imagem."));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  async function uploadCover(file) {
+    try {
+      setMsg("");
+      setSaved("Enviando capa…");
+      const jpg = await toJpeg(file);
+      state = await call("GET", api);
+      await put(state.upload.capa.enviar, jpg, "image/jpeg", () => {});
+      dirty.cover_url = state.upload.capa.publico + "?v=" + Date.now();
+      dirty.thumb_offset = null;
+      await save();
+    } catch (e) {
+      setSaved("");
+      setMsg(e.message);
+    }
+  }
+
+  // ---------------------------------------------------------------- publicar
+  async function postNow() {
+    if (!(await save())) return;
+    if (!confirm("Publicar agora no @" + state.conta + "?")) return;
+    try {
+      state = await call("POST", api + "/publicar", {});
+      render();
+      schedulePoll();
+    } catch (e) { setMsg(e.message); }
+  }
+
+  async function schedule() {
+    if (!(await save())) return;
+    const v = $("#when").value;
+    if (!v) return setMsg("Escolha a data e a hora.");
+    const at = new Date(v);
+    if (!confirm("Agendar para " + fmt(at) + " no @" + state.conta + "?")) return;
+    try {
+      state = await call("POST", api + "/publicar", { quando: at.toISOString() });
+      render();
+      schedulePoll();
+    } catch (e) { setMsg(e.message); }
+  }
+
+  async function cancelSched() {
+    try { state = await call("DELETE", api + "/publicar"); render(); schedulePoll(); } catch (e) { setMsg(e.message); }
+  }
+
+  window.addEventListener("beforeunload", (e) => { if (uploading || Object.keys(dirty).length) { e.preventDefault(); e.returnValue = ""; } });
+  load();
+})();
+</script>
+</body>
+</html>

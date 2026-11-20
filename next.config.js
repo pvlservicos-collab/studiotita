@@ -9,6 +9,22 @@ const nextConfig = {
       "/api/video-projects/**": ["./fontes/**", "./node_modules/ffmpeg-static/**", "./node_modules/@napi-rs/canvas*/**"],
     },
   },
+  // link temporário do postador: a página é estática e lê o token do endereço
+  async rewrites() {
+    return [{ source: "/postar/:token", destination: "/postar.html" }];
+  },
+  async headers() {
+    return [
+      {
+        source: "/postar/:token",
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "no-store" },
+        ],
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.fbcdn.net" },
